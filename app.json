@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "FallNotifier",
+    "slug": "FallNotifier",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/FallNotifierIcon.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/FallNotifierSplash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/FallNotifierForeground.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/FallNotifierFavicon.png"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
