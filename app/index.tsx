@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
 import * as Font from "expo-font";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Alert, StyleSheet } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import LoadingIndicator from "./components/LoadingIndicator";
 import NavBar from "./components/NavBar";
 import PhoneNumberInput from "./components/PhoneNumberInput";
+import NumbersList from "./components/NumbersList";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Load custom fonts
 const loadFonts = async () => {
   try {
     await Font.loadAsync({
@@ -23,6 +26,7 @@ const loadFonts = async () => {
 const Home: React.FC = () => {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneNumbers, setPhoneNumbers] = useState<string[]>([]);
 
   useEffect(() => {
     loadFonts()
@@ -30,14 +34,46 @@ const Home: React.FC = () => {
       .catch((error) => {
         console.error("Error loading fonts:", error);
       });
+
+    const loadPhoneNumbers = async () => {
+      try {
+        const storedNumbers = await AsyncStorage.getItem("phoneNumbers");
+        if (storedNumbers) {
+          setPhoneNumbers(JSON.parse(storedNumbers));
+        }
+      } catch (error) {
+        console.error("Failed to load phone numbers:", error);
+      }
+    };
+
+    loadPhoneNumbers();
   }, []);
 
   if (!fontsLoaded) {
     return <LoadingIndicator />; // Show loading indicator
   }
 
-  const handleAddPress = (number: string) => {
+  // Handle adding a phone number
+  const handleAddPress = async (number: string) => {
     Alert.alert("Phone Number Added", `You added: ${number}`);
+
+    const updatedNumbers = [...phoneNumbers, number];
+    setPhoneNumbers(updatedNumbers);
+
+    // Save to local storage
+    try {
+      await AsyncStorage.setItem(
+        "phoneNumbers",
+        JSON.stringify(updatedNumbers)
+      );
+      const storedNumbers = await AsyncStorage.getItem("phoneNumbers");
+      console.log(
+        "Current phone numbers in AsyncStorage:",
+        JSON.parse(storedNumbers || "[]")
+      );
+    } catch (error) {
+      console.error("Failed to save phone numbers:", error);
+    }
   };
 
   return (
@@ -53,6 +89,10 @@ const Home: React.FC = () => {
           setPhoneNumber={setPhoneNumber}
           onAddPress={handleAddPress}
         />
+        <View>
+          {/* <NumbersList phoneNumbers={phoneNumbers} /> */}
+          {/* <Map /> */}
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );

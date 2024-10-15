@@ -41,6 +41,7 @@ const PhoneNumberInput: React.FC<PhoneNumberInputProps> = ({
         placeholder="Enter phone number"
         placeholderTextColor="rgba(248, 248, 248, .5)"
         keyboardType="phone-pad"
+        caretHidden={true}
         value={phoneNumber}
         onChangeText={setPhoneNumber}
       />
