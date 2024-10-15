@@ -90,7 +90,7 @@ const Home: React.FC = () => {
           onAddPress={handleAddPress}
         />
         <View>
-          {/* <NumbersList phoneNumbers={phoneNumbers} /> */}
+          <NumbersList phoneNumbers={phoneNumbers} />
           {/* <Map /> */}
         </View>
       </SafeAreaView>
