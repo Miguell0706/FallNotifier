@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import * as Font from "expo-font";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Alert, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View, Text } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import LoadingIndicator from "./components/LoadingIndicator";
 import NavBar from "./components/NavBar";
 import PhoneNumberInput from "./components/PhoneNumberInput";
 import NumbersList from "./components/NumbersList";
+import GMap from "./components/Map";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Load custom fonts
@@ -89,9 +90,9 @@ const Home: React.FC = () => {
           setPhoneNumber={setPhoneNumber}
           onAddPress={handleAddPress}
         />
-        <View>
+        <View style={styles.mapListContainer}>
           <NumbersList phoneNumbers={phoneNumbers} />
-          {/* <Map /> */}
+          <GMap />
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -107,6 +108,10 @@ const styles = StyleSheet.create({
     flex: 1, // Ensures the LinearGradient takes full height
     justifyContent: "flex-start",
     flexDirection: "column",
+  },
+  mapListContainer: {
+    flex: 1,
+    flexDirection: "row",
   },
 });
 

@@ -75,9 +75,10 @@ const NumbersList: React.FC<NumbersListProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    padding: 10,
-    width: 165,
-    minWidth: 165,
+    paddingVertical: 10,
+    paddingHorizontal: 3,
+    width: 160,
+    minWidth: 160,
     display: "flex",
     flexDirection: "column",
   },
