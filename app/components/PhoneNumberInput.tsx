@@ -244,6 +244,7 @@ const styles = StyleSheet.create({
     backgroundColor: "black",
     borderRadius: 10,
     padding: 20,
+    height: "50%",
   },
   countryCodeItem: {
     padding: 15,
