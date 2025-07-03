@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "FallNotifier3",
+    "slug": "FallNotifier3",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/FallNotifierIcon.png",
+    "scheme": "fallnotifier3",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/FallNotifierForeground.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/FallNotifierFavicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/FallNotifierSplash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
