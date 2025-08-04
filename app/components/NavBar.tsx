@@ -1,12 +1,12 @@
 import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  StyleSheet,
-  Dimensions,
   Animated,
+  Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 // Get device dimensions
@@ -35,7 +35,7 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
   // Interpolate the animated value to get rotation degrees
   const rotate = rotateValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "180deg"], // Rotate from 0 to 180 degrees
+    outputRange: ["0deg", "220deg"], // Rotate from 0 to 180 degrees
   });
 
   return (

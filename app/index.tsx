@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from "react";
-import * as Font from "expo-font";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Alert, StyleSheet, View, Text } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import LoadingIndicator from "./components/LoadingIndicator";
-import NavBar from "./components/NavBar";
-import PhoneNumberInput from "./components/PhoneNumberInput";
-import NumbersList from "./components/NumbersList";
-import GMap from "./components/Map";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Font from "expo-font";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useState } from "react";
+import { Alert, StyleSheet, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import LoadingIndicator from "./components/LoadingIndicator";
+import GMap from "./components/Map";
+import NavBar from "./components/NavBar";
+import NumbersList from "./components/NumbersList";
+import PhoneNumberInput from "./components/PhoneNumberInput";
 
 // Load custom fonts
 const loadFonts = async () => {

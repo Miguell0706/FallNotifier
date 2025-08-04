@@ -12,11 +12,17 @@
       "supportsTablet": true
     },
     "android": {
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDhb71yWElkr6TKVkhb2YVRxxVHcal-cJo"
+        }
+      },
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/FallNotifierForeground.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.miguell0706.FallNotifier3"
     },
     "web": {
       "bundler": "metro",

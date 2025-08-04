@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import {
-  TouchableOpacity,
-  TextInput,
-  Text,
-  View,
-  StyleSheet,
   Alert,
-  Modal,
-  FlatList,
   Dimensions,
+  FlatList,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 interface PhoneNumberInputProps {
@@ -147,7 +147,9 @@ const PhoneNumberInput: React.FC<PhoneNumberInputProps> = ({
           <View style={styles.modalContent}>
             <FlatList
               data={countryCodes}
-              keyExtractor={(item) => item.code}
+              keyExtractor={(item, index) =>
+                `${item.code}-${item.name}-${index}`
+              }
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.countryCodeItem}

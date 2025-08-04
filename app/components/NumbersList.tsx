@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  FlatList,
   Image,
   StyleSheet,
-  FlatList,
+  Text,
   TouchableOpacity,
+  View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface NumbersListProps {
   phoneNumbers: string[];
@@ -44,7 +44,7 @@ const NumbersList: React.FC<NumbersListProps> = ({
       <Text style={styles.title}>Numbers List:</Text>
       <FlatList
         data={phoneNumbers}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item, index) => `${item}-${index}`} // Safer, even if not unique
         renderItem={({ item }) => (
           <View style={styles.numberContainer}>
             <Text style={styles.numberText}>{item}</Text>
@@ -55,15 +55,6 @@ const NumbersList: React.FC<NumbersListProps> = ({
               <Image
                 source={require("../../assets/images/trash.png")}
                 style={styles.deleteImage}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={() => console.log("Test button pressed: ", item)}
-            >
-              <Image
-                source={require("../../assets/images/wrench.png")}
-                style={styles.testImage}
               />
             </TouchableOpacity>
           </View>

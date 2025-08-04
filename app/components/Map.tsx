@@ -1,15 +1,17 @@
+import * as Linking from "expo-linking";
+import * as Location from "expo-location";
 import React, { useEffect, useState } from "react";
+import { ActivityIndicator } from "react-native";
+
 import {
-  View,
+  AppState,
+  AppStateStatus,
   StyleSheet,
   Text,
   TouchableOpacity,
-  AppState,
-  AppStateStatus,
+  View,
 } from "react-native";
 import MapView, { Region } from "react-native-maps";
-import * as Location from "expo-location";
-import * as Linking from "expo-linking";
 
 interface MapProps {}
 
@@ -28,6 +30,7 @@ const GMap: React.FC<MapProps> = () => {
     }
 
     let location = await Location.getCurrentPositionAsync({});
+    console.log(location.coords.latitude, location.coords.longitude);
     setRegion({
       latitude: location.coords.latitude,
       longitude: location.coords.longitude,
@@ -57,7 +60,7 @@ const GMap: React.FC<MapProps> = () => {
     return () => {
       appStateListener.remove(); // Clean up the listener on unmount
     };
-  }, [appState]);
+  }, []);
 
   const openSettings = () => {
     Linking.openSettings(); // Redirect to the settings to manually enable permissions
@@ -66,26 +69,33 @@ const GMap: React.FC<MapProps> = () => {
   return (
     <View style={styles.mapContainer}>
       <View style={styles.mapWrapper}>
-        <MapView
-          style={styles.map}
-          region={region || undefined} // Show default map if location isn't granted
-          showsUserLocation={!!region} // Only show user location if region is set
-          showsMyLocationButton={!!region} // Show "locate me" button if region is set
-        />
-
-        {/* Overlay the tint and message if permission is denied */}
-        {!region && errorMsg && (
-          <View style={styles.overlay}>
-            <Text style={styles.overlayText}>
-              Allow location permission to enable location with the alert
-            </Text>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={openSettings}
-            >
-              <Text style={styles.settingsText}>Open Settings</Text>
-            </TouchableOpacity>
+        {!region ? (
+          // Show loading spinner while region is null
+          <View style={styles.spinnerContainer}>
+            <ActivityIndicator size="large" color="#007bff" />
+            {errorMsg && (
+              <>
+                <Text style={styles.overlayText}>
+                  Allow location permission to enable location with the alert
+                </Text>
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={openSettings}
+                >
+                  <Text style={styles.settingsText}>Open Settings</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
+        ) : (
+          // Show the map when region is ready
+          <MapView
+            provider="google"
+            style={styles.map}
+            region={region}
+            showsUserLocation={true}
+            showsMyLocationButton={true}
+          />
         )}
       </View>
     </View>
@@ -125,6 +135,13 @@ const styles = StyleSheet.create({
   settingsText: {
     color: "#fff",
     fontWeight: "bold",
+  },
+  spinnerContainer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.8)", // Optional fade
+    zIndex: 10,
   },
 });
 
