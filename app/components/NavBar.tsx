@@ -72,13 +72,12 @@ const styles = StyleSheet.create({
     fontSize: width * 0.065, // 6% of screen width
     fontFamily: "Construction3",
     color: "black",
-    letterSpacing: 1.25,
+    letterSpacing: width * 0.003, // 0.2% of screen width
     textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 1.2, height: 1.2 },
+    textShadowOffset: { width: width * 0.002, height: height * 0.002 },
     textShadowRadius: 1,
   },
   logo: {
-    paddingLeft: width * 0.1, // 10% of screen width
     width: width * 0.08, // 8% of screen width
     height: height * 0.04, // 4% of screen height
     resizeMode: "contain",

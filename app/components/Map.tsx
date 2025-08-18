@@ -1,20 +1,21 @@
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator } from "react-native";
-
 import {
+  ActivityIndicator,
   AppState,
   AppStateStatus,
+  Dimensions,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import MapView, { Region } from "react-native-maps";
-
+import { SafeAreaView } from "react-native-safe-area-context";
 interface MapProps {}
 
+const { width } = Dimensions.get("window");
 const GMap: React.FC<MapProps> = () => {
   const [region, setRegion] = useState<Region | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -67,38 +68,40 @@ const GMap: React.FC<MapProps> = () => {
   };
 
   return (
-    <View style={styles.mapContainer}>
-      <View style={styles.mapWrapper}>
-        {!region ? (
-          // Show loading spinner while region is null
-          <View style={styles.spinnerContainer}>
-            <ActivityIndicator size="large" color="#007bff" />
-            {errorMsg && (
-              <>
-                <Text style={styles.overlayText}>
-                  Allow location permission to enable location with the alert
-                </Text>
-                <TouchableOpacity
-                  style={styles.settingsButton}
-                  onPress={openSettings}
-                >
-                  <Text style={styles.settingsText}>Open Settings</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        ) : (
-          // Show the map when region is ready
-          <MapView
-            provider="google"
-            style={styles.map}
-            region={region}
-            showsUserLocation={true}
-            showsMyLocationButton={true}
-          />
-        )}
+    <SafeAreaView style={{ flex: 1 }}>
+      <View style={styles.mapContainer}>
+        <View style={styles.mapWrapper}>
+          {!region ? (
+            // Show loading spinner while region is null
+            <View style={styles.spinnerContainer}>
+              <ActivityIndicator size="large" color="#007bff" />
+              {errorMsg && (
+                <>
+                  <Text style={styles.overlayText}>
+                    Allow location permission to enable location with the alert
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.settingsButton}
+                    onPress={openSettings}
+                  >
+                    <Text style={styles.settingsText}>Open Settings</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          ) : (
+            // Show the map when region is ready
+            <MapView
+              provider="google"
+              style={styles.map}
+              region={region}
+              showsUserLocation={true}
+              showsMyLocationButton={true}
+            />
+          )}
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -123,12 +126,12 @@ const styles = StyleSheet.create({
   },
   overlayText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: width * 0.045,
     textAlign: "center",
     marginBottom: 20,
   },
   settingsButton: {
-    padding: 10,
+    padding: width * 0.03,
     backgroundColor: "#007bff",
     borderRadius: 5,
   },

@@ -1,5 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   FlatList,
   Image,
@@ -11,46 +10,33 @@ import {
 
 interface NumbersListProps {
   phoneNumbers: string[];
+  onDelete: (number: string) => void;
 }
 
 const NumbersList: React.FC<NumbersListProps> = ({
-  phoneNumbers: initialPhoneNumbers,
+  phoneNumbers,
+  onDelete,
 }) => {
-  const [phoneNumbers, setPhoneNumbers] =
-    useState<string[]>(initialPhoneNumbers);
-
-  useEffect(() => {
-    // Load numbers from local storage when the component mounts
-    const loadNumbers = async () => {
-      const storedNumbers = await AsyncStorage.getItem("phoneNumbers");
-      if (storedNumbers) {
-        setPhoneNumbers(JSON.parse(storedNumbers));
-      }
-    };
-    loadNumbers();
-  }, []);
-
-  const deletePhoneNumber = async (number: string) => {
-    // Remove the number from the array
-    const updatedNumbers = phoneNumbers.filter((phone) => phone !== number);
-    setPhoneNumbers(updatedNumbers);
-
-    // Update local storage
-    await AsyncStorage.setItem("phoneNumbers", JSON.stringify(updatedNumbers));
-  };
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Numbers List:</Text>
       <FlatList
         data={phoneNumbers}
-        keyExtractor={(item, index) => `${item}-${index}`} // Safer, even if not unique
+        keyExtractor={(item, index) => `${item}-${index}`}
+        ListEmptyComponent={
+          <Text style={{ opacity: 0.6, fontStyle: "italic" }}>
+            No numbers yet.
+          </Text>
+        }
         renderItem={({ item }) => (
           <View style={styles.numberContainer}>
             <Text style={styles.numberText}>{item}</Text>
             <TouchableOpacity
               style={styles.deleteButton}
-              onPress={() => deletePhoneNumber(item)}
+              onPress={() => onDelete(item)}
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={`Delete ${item}`}
             >
               <Image
                 source={require("../../assets/images/trash.png")}
@@ -90,6 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   numberText: {
+    flex: 1,
     padding: 2,
     fontSize: 14,
     fontWeight: "600",
