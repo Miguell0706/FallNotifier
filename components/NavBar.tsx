@@ -44,12 +44,12 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
         <Text style={styles.title}>Fall Notifier</Text>
         <Image
           style={styles.logo}
-          source={require("../../assets/images/FallNotifierFavicon.png")}
+          source={require("../assets/images/FallNotifierFavicon.png")}
         />
       </View>
       <TouchableOpacity activeOpacity={0.6} onPress={handleSettingsPress}>
         <Animated.Image
-          source={require("../../assets/images/settings.png")}
+          source={require("../assets/images/settings.png")}
           style={[styles.image, { transform: [{ rotate }] }]} // Apply the rotation transform
         />
       </TouchableOpacity>

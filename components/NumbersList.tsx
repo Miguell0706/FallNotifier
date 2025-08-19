@@ -39,7 +39,7 @@ const NumbersList: React.FC<NumbersListProps> = ({
               accessibilityLabel={`Delete ${item}`}
             >
               <Image
-                source={require("../../assets/images/trash.png")}
+                source={require("../assets/images/trash.png")}
                 style={styles.deleteImage}
               />
             </TouchableOpacity>
