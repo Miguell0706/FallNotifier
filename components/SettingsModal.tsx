@@ -55,16 +55,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     width: "100%", // matches the parent wrapper width (use a fixed px width for a narrow drawer)
-    backgroundColor: "rgba(255,255,255,0.98)",
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: "transparent",
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 0,
   },
 });

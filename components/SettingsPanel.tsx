@@ -1,4 +1,5 @@
 // components/SettingsPanel.tsx
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
   Alert,
@@ -201,14 +202,20 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   );
 
   return (
-    <View style={{ flex: 1 }}>
-      {screen === "menu" && <Menu />}
-      {screen === "message" && <MessageAndCountdown />}
-      {screen === "test" && <Test />}
-      {screen === "sensitivity" && <SensitivityPage />}
-      {screen === "faq" && <FAQ />}
-      {screen === "donate" && <Donations />}
-    </View>
+    <LinearGradient
+      colors={["#E7C49A", "#B76A2A", "#8F4A2C"]} // tan → brownish amber → umber
+      locations={[0, 0.65, 0.9]}
+      style={styles.linearGradient}
+    >
+      <View style={{ flex: 1 }}>
+        {screen === "menu" && <Menu />}
+        {screen === "message" && <MessageAndCountdown />}
+        {screen === "test" && <Test />}
+        {screen === "sensitivity" && <SensitivityPage />}
+        {screen === "faq" && <FAQ />}
+        {screen === "donate" && <Donations />}
+      </View>
+    </LinearGradient>
   );
 }
 
@@ -250,44 +257,76 @@ function Back({ onPress }: { onPress: () => void }) {
 }
 
 /* ---------- styles ---------- */
+const COLORS = {
+  text: "#F8F5F2",
+  textMuted: "rgba(248,245,242,0.75)",
+  card: "rgba(38,26,20,0.85)", // dark brown glass
+  stroke: "rgba(248,245,242,0.14)", // subtle light border
+  inputBg: "rgba(58,42,34,0.85)", // deeper brown field
+  primary: "#C57A2A", // warm amber button
+};
 
 const styles = StyleSheet.create({
   row: {
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#fff",
+    borderRadius: 12,
+    backgroundColor: COLORS.card,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.stroke,
   },
-  rowText: { fontSize: 16, flex: 1 },
-  chev: { fontSize: 22, opacity: 0.4, paddingHorizontal: 6 },
-  section: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
+  rowText: { fontSize: 16, flex: 1, color: COLORS.text },
+  chev: { fontSize: 22, color: COLORS.textMuted, paddingHorizontal: 6 },
+
+  section: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 6,
+    color: COLORS.text,
+  },
+
   input: {
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.15)",
+    borderColor: COLORS.stroke,
     borderRadius: 10,
     padding: 10,
     fontSize: 16,
-    backgroundColor: "white",
+    backgroundColor: COLORS.inputBg,
+    color: COLORS.text,
   },
-  backBtn: { marginTop: 16, alignSelf: "flex-start", padding: 8 },
-  backText: { fontSize: 16, fontWeight: "600" },
-  q: { fontWeight: "700", marginTop: 6 },
-  a: { opacity: 0.9, marginTop: 2 },
+
+  backBtn: {
+    marginTop: 16,
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "transparent",
+  },
+  backText: { fontSize: 16, fontWeight: "600", color: COLORS.text },
+
+  q: { fontWeight: "700", marginTop: 6, color: COLORS.text },
+  a: { color: COLORS.textMuted, marginTop: 2 },
+
   btnPrimary: {
-    backgroundColor: "#E18F27",
+    backgroundColor: COLORS.primary,
     padding: 12,
     borderRadius: 10,
     alignItems: "center",
   },
-  btnPrimaryLabel: { color: "#fff", fontWeight: "600" },
+  btnPrimaryLabel: { color: "#12100E", fontWeight: "700" }, // high contrast on amber
   btnGhost: {
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.15)",
+    borderColor: COLORS.stroke,
     alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  linearGradient: {
+    flex: 1,
   },
 });
