@@ -24,7 +24,7 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
     // Trigger the rotation animation
     Animated.timing(rotateValue, {
       toValue: isRotated ? 0 : 1, // Rotate based on current state
-      duration: 600,
+      duration: 700,
       useNativeDriver: true,
     }).start();
 
@@ -35,7 +35,7 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
   // Interpolate the animated value to get rotation degrees
   const rotate = rotateValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ["0deg", "220deg"], // Rotate from 0 to 180 degrees
+    outputRange: ["0deg", "160deg"], // Rotate from 0 to 180 degrees
   });
 
   return (

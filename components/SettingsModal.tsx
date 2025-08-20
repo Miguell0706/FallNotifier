@@ -27,7 +27,7 @@ export default function SettingsModal({ open, children }: Props) {
     if (!width) return;
     Animated.timing(tx, {
       toValue: open ? 0 : width, // 0 = visible, width = offscreen-right
-      duration: open ? 260 : 220,
+      duration: open ? 400 : 400,
       easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start();

@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -63,7 +62,7 @@ const makeStyles = (fs: (n: number) => number) =>
       borderColor: COLORS.stroke,
       overflow: "hidden",
       ...SHADOW,
-      marginBottom: 16,
+      marginBottom: 10,
     },
 
     sectionTitle: {
@@ -148,23 +147,78 @@ const makeStyles = (fs: (n: number) => number) =>
 
     // Back
     backBtn: {
-      marginTop: 8,
-      alignSelf: "flex-start",
-      paddingVertical: 8,
-      paddingHorizontal: 10,
-      borderRadius: 10,
-      backgroundColor: "transparent",
+      padding: 12,
+      borderTopWidth: 1,
+      borderColor: COLORS.stroke,
+      backgroundColor: "rgba(255,255,255,0.05)",
     },
     backText: { fontSize: fs(16), fontWeight: "600", color: COLORS.text },
 
-    // FAQ Q&A
+    // ===== FAQ Q&A =====
+    qaBlock: {
+      marginBottom: 16, // spacing between Q&A groups
+    },
     q: {
       fontWeight: "700",
       color: COLORS.text,
-      marginBottom: 2,
-      fontSize: fs(14),
+      marginBottom: 4,
+      fontSize: fs(15),
     },
-    a: { color: COLORS.textMuted, fontSize: fs(13), lineHeight: fs(19) },
+    a: {
+      color: COLORS.textMuted,
+      fontSize: fs(13),
+      lineHeight: fs(19),
+    },
+
+    // ===== Countdown Stepper =====
+    stepperRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      marginVertical: 8,
+    },
+    stepBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.16)",
+      backgroundColor: "rgba(255,255,255,0.06)",
+    },
+    stepBtnLabel: {
+      fontSize: fs ? fs(20) : 20,
+      fontWeight: "800",
+      color: COLORS.text,
+      lineHeight: fs ? fs(22) : 22,
+    },
+    stepDisplay: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 10,
+    },
+    stepDisplayLabel: {
+      fontSize: fs(16),
+      fontWeight: "700",
+      color: COLORS.text,
+    },
+    stepInput: {
+      flex: 1,
+      textAlign: "center",
+      paddingVertical: 10,
+    },
+    // ===== Fade Overlay for Scroll hint =====
+    fadeBottom: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 40,
+      backgroundColor: "transparent",
+    },
   });
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
@@ -175,7 +229,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     "I may have fallen. My location: {link}"
   );
   const [countdownSec, setCountdownSec] = useState(10);
-  const [showConfirm, setShowConfirm] = useState(true);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
 
   // Responsive font scaling
@@ -242,6 +295,11 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     </View>
   );
 
+  const clamp = (n: number, lo = 0, hi = 10) => Math.max(lo, Math.min(hi, n));
+
+  const incCountdown = () => setCountdownSec((prev) => clamp((prev ?? 0) + 1));
+
+  const decCountdown = () => setCountdownSec((prev) => clamp((prev ?? 0) - 1));
   const MessageAndCountdown = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Message & Countdown</Text>
@@ -268,30 +326,51 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
           label="Countdown (seconds)"
           hint="Delay before sending so you can cancel an accidental alert."
         >
-          <TextInput
-            value={String(countdownSec)}
-            onChangeText={(t) =>
-              setCountdownSec(Math.max(0, parseInt(t || "0", 10) || 0))
-            }
-            keyboardType="number-pad"
-            style={styles.input}
-            selectionColor={COLORS.primary}
-          />
-        </Field>
+          <View style={styles.stepperRow}>
+            <Pressable
+              onPress={decCountdown}
+              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+              style={styles.stepBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Decrease countdown"
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={styles.stepBtnLabel}>−</Text>
+            </Pressable>
 
-        <Field label="Show confirm dialog (non-emergency)">
-          <Switch value={showConfirm} onValueChange={setShowConfirm} />
-        </Field>
+            <TextInput
+              value={String(countdownSec)}
+              onChangeText={(t) => {
+                const n = clamp(parseInt(t || "0", 10) || 0);
+                setCountdownSec(n);
+              }}
+              onBlur={() => setCountdownSec((v) => clamp(v))}
+              keyboardType="number-pad"
+              style={[styles.input, styles.stepInput]}
+              selectionColor={COLORS.primary}
+            />
 
-        <Back onPress={() => setScreen("menu")} />
+            <Pressable
+              onPress={incCountdown}
+              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+              style={styles.stepBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Increase countdown"
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={styles.stepBtnLabel}>+</Text>
+            </Pressable>
+          </View>
+        </Field>
       </ScrollView>
+      <Back onPress={() => setScreen("menu")} />
     </View>
   );
 
   const Test = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Test</Text>
-      <View style={styles.panelBody}>
+      <ScrollView style={styles.panelBody}>
         <Text style={styles.bodyText}>
           Simulation shows your final message without sending. The Android
           option opens your SMS app so you can tap Send.
@@ -335,63 +414,108 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         >
           <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
         </Pressable>
+      </ScrollView>
 
-        <Back onPress={() => setScreen("menu")} />
-      </View>
+      <Back onPress={() => setScreen("menu")} />
     </View>
   );
 
+  const incSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) + 1));
+
+  const decSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) - 1));
   const SensitivityPage = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Sensitivity</Text>
       <ScrollView contentContainerStyle={styles.panelBody}>
         <Field
           label="Sensitivity (1–10)"
-          hint="Higher triggers on smaller movements; lower requires stronger movement."
+          hint="Higher = triggers more easily (may cause more false alarms). Lower = needs stronger motion (may miss gentle falls)."
         >
-          <TextInput
-            value={String(sensitivity)}
-            keyboardType="number-pad"
-            onChangeText={(t) => {
-              const n = Math.min(10, Math.max(1, parseInt(t || "0", 10) || 1));
-              setSensitivity(n);
-            }}
-            style={styles.input}
-            selectionColor={COLORS.primary}
-          />
-        </Field>
+          <View style={styles.stepperRow}>
+            <Pressable
+              onPress={decSensitivity}
+              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+              style={styles.stepBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Decrease sensitivity"
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={styles.stepBtnLabel}>−</Text>
+            </Pressable>
 
-        <Back onPress={() => setScreen("menu")} />
+            {/* Display-only value for clarity (no keyboard) */}
+            <View style={[styles.input, styles.stepDisplay]}>
+              <Text style={styles.stepDisplayLabel}>{sensitivity}</Text>
+            </View>
+
+            <Pressable
+              onPress={incSensitivity}
+              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
+              style={styles.stepBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Increase sensitivity"
+              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            >
+              <Text style={styles.stepBtnLabel}>+</Text>
+            </Pressable>
+          </View>
+        </Field>
       </ScrollView>
+
+      {/* keep Back visible without needing to scroll */}
+      <Back onPress={() => setScreen("menu")} />
     </View>
   );
-
   const FAQ = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>FAQ</Text>
       <ScrollView contentContainerStyle={styles.panelBody}>
-        <Q q="Who pays for messages?">
-          Messages are sent via your phone plan on Android; your mobile carrier
-          may apply charges.
-        </Q>
-        <Q q="Do settings persist?">
-          In this basic version they’re local to this screen. A settings context
-          can save and reuse them across the app.
-        </Q>
-        <Q q="What does countdown do?">
-          It delays sending to give you a chance to cancel before an alert is
-          sent.
-        </Q>
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>How does FallNotifier detect a fall?</Text>
+          <Text style={styles.a}>
+            The app uses your phone’s motion sensors. Sudden movement matching a
+            fall pattern will trigger an alert.
+          </Text>
+        </View>
 
-        <Back onPress={() => setScreen("menu")} />
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Who gets notified if I fall?</Text>
+          <Text style={styles.a}>
+            You choose emergency contacts in the settings. They’ll receive a
+            text alert if a fall is detected and not cancelled.
+          </Text>
+        </View>
+
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Will it send my location?</Text>
+          <Text style={styles.a}>
+            Yes. If location permission is granted, the alert includes your GPS
+            location so contacts know where you are.
+          </Text>
+        </View>
+
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Does it work without internet?</Text>
+          <Text style={styles.a}>
+            On Android, SMS is sent directly via your carrier.
+          </Text>
+        </View>
+
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Can I cancel an accidental alert?</Text>
+          <Text style={styles.a}>
+            Yes. The countdown gives you a few seconds to cancel before the
+            alert is sent.
+          </Text>
+        </View>
       </ScrollView>
+      <Back onPress={() => setScreen("menu")} />
     </View>
   );
-
   const Donations = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Donations</Text>
-      <View style={styles.panelBody}>
+      <ScrollView style={styles.panelBody}>
         <Text style={styles.bodyText}>Support development:</Text>
 
         <Pressable
@@ -409,9 +533,8 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         >
           <Text style={styles.btnGhostLabel}>Open donations page</Text>
         </Pressable>
-
-        <Back onPress={() => setScreen("menu")} />
-      </View>
+      </ScrollView>
+      <Back onPress={() => setScreen("menu")} />
     </View>
   );
 
