@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import DisabledBanner from "../components/DisabledBanner";
 import LoadingIndicator from "../components/LoadingIndicator";
 import GMap from "../components/Map";
 import NavBar from "../components/NavBar";
@@ -11,7 +12,6 @@ import NumbersList from "../components/NumbersList";
 import PhoneNumberInput from "../components/PhoneNumberInput";
 import SettingsModal from "../components/SettingsModal";
 import SettingsPanel from "../components/SettingsPanel";
-
 const loadFonts = async () => {
   await Font.loadAsync({
     Construction: require("../assets/fonts/Construction.otf"),
@@ -80,13 +80,14 @@ const Home: React.FC = () => {
     >
       <SafeAreaView style={styles.safeArea}>
         <NavBar onSettingsPress={() => setSettingsOpen((s) => !s)} />
-
-        <PhoneNumberInput
-          phoneNumber={phoneNumber}
-          setPhoneNumber={setPhoneNumber}
-          onAddPress={handleAddPress}
-        />
-
+        <View style={styles.inputFlageContainer}>
+          <PhoneNumberInput
+            phoneNumber={phoneNumber}
+            setPhoneNumber={setPhoneNumber}
+            onAddPress={handleAddPress}
+          />
+          <DisabledBanner></DisabledBanner>
+        </View>
         <View style={styles.mapListContainer}>
           <NumbersList
             phoneNumbers={phoneNumbers}
@@ -113,6 +114,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-start",
     flexDirection: "column",
+  },
+  inputFlageContainer: {
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
   },
   mapListContainer: { flex: 1, flexDirection: "row" },
   mapSettingsContainer: { flex: 1, position: "relative" }, // <- fixed braces
