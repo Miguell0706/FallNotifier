@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { useAppEnabled } from "./AppEnabledProvider";
 
@@ -6,19 +6,17 @@ const BANNER_HEIGHT = 42;
 
 export default function DisabledBanner() {
   const { enabled, hydrated, setEnabled } = useAppEnabled();
-  const [dismissed, setDismissed] = useState(false);
-
   // start at 0 width
   const scaleX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const shouldShow = hydrated && !enabled && !dismissed;
+    const shouldShow = hydrated && !enabled;
     Animated.timing(scaleX, {
       toValue: shouldShow ? 1 : 0,
       duration: 250,
       useNativeDriver: true,
     }).start();
-  }, [enabled, hydrated, dismissed, scaleX]);
+  }, [enabled, hydrated, scaleX]);
 
   return (
     <Animated.View

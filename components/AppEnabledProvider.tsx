@@ -32,7 +32,10 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (mounted && raw !== null) setEnabledState(raw === "1");
+        if (!mounted) return;
+        if (raw === "1") setEnabledState(true);
+        else if (raw === "0") setEnabledState(false);
+        // else leave default (true)
       } finally {
         if (mounted) setHydrated(true);
       }

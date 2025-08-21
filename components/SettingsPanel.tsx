@@ -13,6 +13,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useEnabledGuard } from "../hooks/useEnabledGuard";
+import { useAppEnabled } from "./AppEnabledProvider";
 
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
@@ -223,7 +225,8 @@ const makeStyles = (fs: (n: number) => number) =>
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [screen, setScreen] = useState<Screen>("menu");
-
+  const { setEnabled } = useAppEnabled();
+  const guard = useEnabledGuard();
   // Local state
   const [messageTemplate, setMessageTemplate] = useState(
     "I may have fallen. My location: {link}"
@@ -367,59 +370,66 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     </View>
   );
 
-  const Test = () => (
-    <View style={styles.panel}>
-      <Text style={styles.sectionTitle}>Test</Text>
-      <ScrollView style={styles.panelBody}>
-        <Text style={styles.bodyText}>
-          Simulation shows your final message without sending. The Android
-          option opens your SMS app so you can tap Send.
-        </Text>
+  const Test = () => {
+    const guard = useEnabledGuard();
 
-        <Pressable
-          style={styles.btnGhost}
-          onPress={() => {
-            const msg = messageTemplate.replace(
-              "{link}",
-              "https://maps.google.com/?q=0,0"
-            );
-            Alert.alert("Simulation (no SMS sent)", msg);
-          }}
-        >
-          <Text style={styles.btnGhostLabel}>Run Simulation (free)</Text>
-        </Pressable>
+    return (
+      <View style={styles.panel}>
+        <Text style={styles.sectionTitle}>Test</Text>
+        <ScrollView style={styles.panelBody}>
+          <Text style={styles.bodyText}>
+            Simulation shows your final message without sending. The Android
+            option opens your SMS app so you can tap Send.
+          </Text>
 
-        <Pressable
-          style={styles.btnPrimary}
-          onPress={async () => {
-            if (Platform.OS !== "android") {
-              Alert.alert(
-                "Android only",
-                "SMS sending is Android-only for now."
+          {/* Simulation button */}
+          <Pressable
+            style={styles.btnGhost}
+            onPress={guard(() => {
+              const msg = messageTemplate.replace(
+                "{link}",
+                "https://maps.google.com/?q=0,0"
               );
-              return;
-            }
-            const { isAvailableAsync, sendSMSAsync } = await import("expo-sms");
-            const ok = await isAvailableAsync();
-            if (!ok) {
-              Alert.alert("SMS unavailable", "This device cannot send SMS.");
-              return;
-            }
-            const msg = messageTemplate.replace(
-              "{link}",
-              "https://maps.google.com/?q=0,0"
-            );
-            await sendSMSAsync(phoneNumbers, msg);
-          }}
-        >
-          <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
-        </Pressable>
-      </ScrollView>
+              Alert.alert("Simulation (no SMS sent)", msg);
+            })}
+          >
+            <Text style={styles.btnGhostLabel}>Run Simulation (free)</Text>
+          </Pressable>
 
-      <Back onPress={() => setScreen("menu")} />
-    </View>
-  );
+          {/* Real SMS button */}
+          <Pressable
+            style={styles.btnPrimary}
+            onPress={guard(async () => {
+              if (Platform.OS !== "android") {
+                Alert.alert(
+                  "Android only",
+                  "SMS sending is Android-only for now."
+                );
+                return;
+              }
+              const { isAvailableAsync, sendSMSAsync } = await import(
+                "expo-sms"
+              );
+              const ok = await isAvailableAsync();
+              if (!ok) {
+                Alert.alert("SMS unavailable", "This device cannot send SMS.");
+                return;
+              }
+              const msg = messageTemplate.replace(
+                "{link}",
+                "https://maps.google.com/?q=0,0"
+              );
+              await sendSMSAsync(phoneNumbers, msg);
+            })}
+          >
+            <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
+          </Pressable>
+        </ScrollView>
 
+        <Back onPress={() => setScreen("menu")} />
+      </View>
+    );
+  };
   const incSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) + 1));
 
   const decSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) - 1));
