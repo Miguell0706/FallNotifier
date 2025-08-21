@@ -1,6 +1,9 @@
 // components/SettingsPanel.tsx
 import { BlurView } from "expo-blur";
+import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Linking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
@@ -15,7 +18,6 @@ import {
 } from "react-native";
 import { useEnabledGuard } from "../hooks/useEnabledGuard";
 import { useAppEnabled } from "./AppEnabledProvider";
-
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
 
@@ -221,6 +223,37 @@ const makeStyles = (fs: (n: number) => number) =>
       height: 40,
       backgroundColor: "transparent",
     },
+    donateCard: {
+      padding: 14,
+      borderRadius: 14,
+      backgroundColor: "rgba(255,255,255,0.06)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+      gap: 10,
+    },
+    cardTitle: {
+      fontSize: fs(16),
+      fontWeight: "700",
+      color: COLORS.text,
+    },
+    rowButtons: {
+      flexDirection: "row",
+      gap: 10,
+    },
+    smallNote: {
+      color: COLORS.textMuted,
+      fontSize: fs(12),
+    },
+    copyBtn: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.16)",
+      backgroundColor: "rgba(255,255,255,0.04)",
+      alignItems: "center",
+    },
+    copyBtnLabel: { color: COLORS.text, fontSize: fs(13), fontWeight: "600" },
   });
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
@@ -233,7 +266,13 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
+  // Donation links (replace with your actual links)
+  const DONATION_LINKS = {
+    coffee: "https://buymeacoffee.com/miguelloza4",
+    paypal: "https://paypal.me/Miguell0706",
+  };
 
+  // optional: one or more crypto addresses
   // Responsive font scaling
   const { width } = useWindowDimensions();
   const SCALE = width < 390 ? 1.1 : width > 420 ? 1.7 : 1.3;
@@ -256,7 +295,31 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
       </View>
     );
   }
+  async function openLink(url: string) {
+    try {
+      const result = await WebBrowser.openBrowserAsync(url, {
+        enableBarCollapsing: true,
+        toolbarColor: "#1e140f",
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      });
+      // if user’s platform can’t present WebBrowser, fall back:
+      if (!result || (result as any).type === "cancel") {
+        // no-op — they likely closed it
+      }
+    } catch {
+      const can = await Linking.canOpenURL(url);
+      if (can) {
+        Linking.openURL(url);
+      } else {
+        Alert.alert("Unable to open link", "Please try again later.");
+      }
+    }
+  }
 
+  async function copyToClipboard(text: string, label?: string) {
+    await Clipboard.setStringAsync(text);
+    Alert.alert("Copied", `${label ?? "Value"} copied to clipboard.`);
+  }
   function Q({ q, children }: { q: string; children: React.ReactNode }) {
     return (
       <View style={{ marginBottom: 12 }}>
@@ -525,25 +588,36 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const Donations = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Donations</Text>
-      <ScrollView style={styles.panelBody}>
-        <Text style={styles.bodyText}>Support development:</Text>
 
-        <Pressable
-          style={styles.btnPrimary}
-          onPress={() => Alert.alert("Link", "Open your donation link here")}
-        >
-          <Text style={styles.btnPrimaryLabel}>Buy me a coffee ☕</Text>
-        </Pressable>
+      <ScrollView style={styles.panelBody} contentContainerStyle={{ gap: 14 }}>
+        <Text style={styles.bodyText}>
+          If this app helps you or someone you love, you can support its ongoing
+          development here. Thank you! 🙏
+        </Text>
 
-        <Pressable
-          style={styles.btnGhost}
-          onPress={() =>
-            Alert.alert("Link", "Open your secondary donations page")
-          }
-        >
-          <Text style={styles.btnGhostLabel}>Open donations page</Text>
-        </Pressable>
+        {/* Coffee / one-off tips */}
+        <View style={styles.donateCard}>
+          <Text style={styles.cardTitle}>One-tap tip</Text>
+          <Text style={styles.smallNote}>
+            Quick $3–$10 coffee-style support
+          </Text>
+          <View style={styles.rowButtons}>
+            <Pressable
+              style={[styles.btnPrimary, { flex: 1 }]}
+              onPress={() => openLink(DONATION_LINKS.coffee)}
+            >
+              <Text style={styles.btnPrimaryLabel}>Buy me a coffee ☕</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.btnGhost, { flex: 1 }]}
+              onPress={() => openLink(DONATION_LINKS.paypal)}
+            >
+              <Text style={styles.btnGhostLabel}>PayPal</Text>
+            </Pressable>
+          </View>
+        </View>
       </ScrollView>
+
       <Back onPress={() => setScreen("menu")} />
     </View>
   );

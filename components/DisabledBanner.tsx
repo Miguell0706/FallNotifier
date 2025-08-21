@@ -44,8 +44,10 @@ const styles = StyleSheet.create({
     right: 0,
     height: BANNER_HEIGHT,
     transformOrigin: "left", // react-native doesn’t have this, so use origin transform trick below
+    pointerEvents: "none",
   },
   banner: {
+    zIndex: 10,
     flex: 1,
     height: BANNER_HEIGHT,
     backgroundColor: "#FFF3CD",
