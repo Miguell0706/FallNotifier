@@ -7,7 +7,7 @@
     "icon": "./assets/images/FallNotifierIcon.png",
     "scheme": "fallnotifier3",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -21,6 +21,7 @@
         "foregroundImage": "./assets/images/FallNotifierForeground.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": ["WAKE_LOCK", "FOREGROUND_SERVICE", "POST_NOTIFICATIONS"],
       "edgeToEdgeEnabled": true,
       "package": "com.miguell0706.FallNotifier3"
     },
@@ -30,6 +31,7 @@
       "favicon": "./assets/images/FallNotifierFavicon.png"
     },
     "plugins": [
+      "expo-notifications",
       "expo-router",
       [
         "expo-splash-screen",

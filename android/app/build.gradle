@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.FallNotifier3'
+    namespace 'com.miguell0706.FallNotifier3'
     defaultConfig {
-        applicationId 'com.anonymous.FallNotifier3'
+        applicationId 'com.miguell0706.FallNotifier3'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

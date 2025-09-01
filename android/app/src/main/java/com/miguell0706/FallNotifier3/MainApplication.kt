@@ -1,4 +1,4 @@
-package com.anonymous.FallNotifier3
+package com.miguell0706.FallNotifier3
 
 import android.app.Application
 import android.content.res.Configuration

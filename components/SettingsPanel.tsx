@@ -542,49 +542,73 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const FAQ = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>FAQ</Text>
+
       <ScrollView contentContainerStyle={styles.panelBody}>
         <View style={styles.qaBlock}>
           <Text style={styles.q}>How does FallNotifier detect a fall?</Text>
           <Text style={styles.a}>
-            The app uses your phone’s motion sensors. Sudden movement matching a
-            fall pattern will trigger an alert.
+            The app monitors your phone’s motion sensors. A sudden impact
+            followed by stillness triggers a countdown. If you don’t cancel in
+            time, an alert is sent.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Who gets notified if I fall?</Text>
           <Text style={styles.a}>
-            You choose emergency contacts in the settings. They’ll receive a
-            text alert if a fall is detected and not cancelled.
+            The emergency contacts you add in Settings. They’ll receive a text
+            message if a fall is detected and not cancelled.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Will it send my location?</Text>
           <Text style={styles.a}>
-            Yes. If location permission is granted, the alert includes your GPS
-            location so contacts know where you are.
+            Yes. If you grant location permission, the alert includes a link to
+            your last known GPS location so contacts can find you.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Does it work without internet?</Text>
           <Text style={styles.a}>
-            On Android, SMS is sent directly via your carrier.
+            No. Alerts are sent by our server (via Twilio), which requires Wi-Fi
+            or mobile data. If there’s no connection at the moment of the fall,
+            the alert can’t be sent.
+          </Text>
+        </View>
+
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Will it work if the app is closed?</Text>
+          <Text style={styles.a}>
+            Yes. Monitoring runs in the background with a small persistent
+            notification. The countdown and alert still work even if the app UI
+            isn’t open.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Can I cancel an accidental alert?</Text>
           <Text style={styles.a}>
-            Yes. The countdown gives you a few seconds to cancel before the
-            alert is sent.
+            Yes. You’ll see a countdown and an “I’m OK” option. Tapping it stops
+            the alert before any message is sent.
+          </Text>
+        </View>
+
+        <View style={styles.qaBlock}>
+          <Text style={styles.q}>Why use Twilio instead of normal SMS?</Text>
+          <Text style={styles.a}>
+            Twilio lets alerts send automatically without requiring you to
+            switch your phone’s default SMS app. It’s simpler and Play-Store
+            compliant, but does require an internet connection.
           </Text>
         </View>
       </ScrollView>
+
       <Back onPress={() => setScreen("menu")} />
     </View>
   );
+
   const Donations = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Donations</Text>
