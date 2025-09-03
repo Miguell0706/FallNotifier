@@ -237,8 +237,7 @@ const makeStyles = (fs: (n: number) => number) =>
       color: COLORS.text,
     },
     rowButtons: {
-      flexDirection: "row",
-      gap: 10,
+      gap: 20,
     },
     smallNote: {
       color: COLORS.textMuted,
@@ -592,15 +591,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
           <Text style={styles.a}>
             Yes. You’ll see a countdown and an “I’m OK” option. Tapping it stops
             the alert before any message is sent.
-          </Text>
-        </View>
-
-        <View style={styles.qaBlock}>
-          <Text style={styles.q}>Why use Twilio instead of normal SMS?</Text>
-          <Text style={styles.a}>
-            Twilio lets alerts send automatically without requiring you to
-            switch your phone’s default SMS app. It’s simpler and Play-Store
-            compliant, but does require an internet connection.
           </Text>
         </View>
       </ScrollView>

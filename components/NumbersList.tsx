@@ -19,7 +19,7 @@ const NumbersList: React.FC<NumbersListProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Numbers List:</Text>
+      <Text style={styles.title}>Numbers List</Text>
       <FlatList
         data={phoneNumbers}
         keyExtractor={(item, index) => `${item}-${index}`}
@@ -63,6 +63,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     fontFamily: "monospace",
+    color: "black",
+    marginLeft: 7,
     marginBottom: 10,
     letterSpacing: 1.1,
   },
