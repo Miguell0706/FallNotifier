@@ -267,7 +267,7 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [sensitivity, setSensitivity] = useState(5); // 1..10
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
-    coffee: "https://buymeacoffee.com/miguelloza4",
+    coffee: "https://buymeacoffee.com/miguellozano3757",
     paypal: "https://paypal.me/Miguell0706",
   };
 
