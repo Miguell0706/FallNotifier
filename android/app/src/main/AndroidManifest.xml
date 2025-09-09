@@ -1,12 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  xmlns:tools="http://schemas.android.com/tools">
+  xmlns:tools="http://schemas.android.com/tools"
+  package="com.miguell0706.FallNotifier3">
 
   <!-- Location (keep only what you actually use) -->
-  <!-- <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/> -->
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
-  <!-- Foreground service + location type if you fetch GPS during countdown -->
+  <!-- Foreground service + location type -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
@@ -17,9 +17,6 @@
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
-
-  <!-- NO SEND_SMS needed with Twilio -->
-  <!-- <uses-permission android:name="android.permission.SEND_SMS"/> -->
 
   <queries>
     <intent>
@@ -38,17 +35,18 @@
     android:theme="@style/AppTheme"
     android:supportsRtl="true">
 
-    <meta-data android:name="com.google.android.geo.API_KEY" android:value="YOUR_GOOGLE_MAPS_API_KEY"/>
+    <!-- Add android:usesCleartextTraffic="true" here only if you really need HTTP in debug -->
+
+    <meta-data android:name="com.google.android.geo.API_KEY" android:value="AIzaSyDhb71yWElkr6TKVkhb2YVRxxVHcal-cJo"/>
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
 
+    <!-- Keep only if you actually use RNBackgroundActions in debug -->
     <service
       android:name="com.asterinet.react.bgactions.RNBackgroundActionsTask"
       android:exported="false"
-      android:foregroundServiceType="dataSync|location"
-      tools:node="merge"
-      tools:replace="android:foregroundServiceType" />
+      android:foregroundServiceType="dataSync|location" />
 
     <activity
       android:name=".MainActivity"
@@ -77,35 +75,21 @@
       android:turnScreenOn="true"
       android:exported="false"
       android:excludeFromRecents="true"
-      android:launchMode="singleTop">
-      <intent-filter>
-        <action android:name="com.fallnotifier.SHOW_COUNTDOWN"/>
-        <category android:name="android.intent.category.DEFAULT"/>
-      </intent-filter>
-    </activity>
+      android:launchMode="singleTop"
+      android:theme="@style/AppTheme.FullScreen" />
 
     <service
       android:name=".FallAlertService"
-      android:exported="true"
+      android:exported="false"
       android:foregroundServiceType="dataSync|location" />
 
     <receiver
-      android:name=".FallAlertReceiver"
-      android:exported="false">
-      <intent-filter>
-        <action android:name="com.fallnotifier.ACTION_SEND_NOW"/>
-        <action android:name="com.fallnotifier.ACTION_CANCEL"/>
-      </intent-filter>
-    </receiver>
-    <receiver
       android:name=".DebugStartReceiver"
-      android:exported="true">   <!-- debug-only surface -->
+      android:exported="true">
       <intent-filter>
-        <action android:name="com.fallnotifier3.DEBUG_START"/>
+        <action android:name="com.miguell0706.FallNotifier3.DEBUG_START" />
       </intent-filter>
     </receiver>
 
-    <!-- Remove if not using legacy HttpClient -->
-    <!-- <uses-library android:name="org.apache.http.legacy" android:required="false"/> -->
   </application>
 </manifest>
