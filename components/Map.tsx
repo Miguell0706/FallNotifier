@@ -1,6 +1,6 @@
 import * as Linking from "expo-linking";
 import * as Location from "expo-location";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -15,35 +15,57 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
+const DEFAULT_REGION: Region = {
+  latitude: 33.4484, // Phoenix default
+  longitude: -112.074,
+  latitudeDelta: 0.05,
+  longitudeDelta: 0.05,
+};
+
 const GMap: React.FC = () => {
-  const [initialRegion, setInitialRegion] = useState<Region | null>(null);
+  const mapRef = useRef<MapView | null>(null);
+  const watchRef = useRef<Location.LocationSubscription | null>(null);
+  const [hasPerm, setHasPerm] = useState<boolean>(false);
+  const [firstFix, setFirstFix] = useState<Region | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const getLocationOnce = async () => {
-    console.log("Map mounted, fetching location...");
+  // animate helper (uncontrolled MapView for smooth user panning)
+  const animateTo = (r: Region, duration = 500) => {
+    mapRef.current?.animateCamera(
+      { center: { latitude: r.latitude, longitude: r.longitude }, zoom: 16 },
+      { duration }
+    );
+  };
 
-    // Ask (or re-ask) for permission
+  const ensurePermission = async (): Promise<boolean> => {
     let { status } = await Location.getForegroundPermissionsAsync();
     if (status !== "granted") {
       const req = await Location.requestForegroundPermissionsAsync();
       status = req.status;
     }
-    if (status !== "granted") {
-      setErrorMsg("Permission to access location was denied");
-      return;
-    }
+    const ok = status === "granted";
+    setHasPerm(ok);
+    if (!ok) setErrorMsg("Permission to access location was denied");
+    return ok;
+  };
 
-    // Try last-known first (instant), then fresh with a timeout fallback
-    const last = await Location.getLastKnownPositionAsync();
-    if (last && !initialRegion) {
-      setInitialRegion({
-        latitude: last.coords.latitude,
-        longitude: last.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
-    }
-    console.log("Last-known location:", last);
+  const seedAndCenter = async () => {
+    // Last-known (fast)
+    try {
+      const last = await Location.getLastKnownPositionAsync();
+      if (last?.coords) {
+        const r: Region = {
+          latitude: last.coords.latitude,
+          longitude: last.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        setFirstFix((prev) => prev ?? r);
+        animateTo(r, 600);
+      }
+    } catch {}
+
+    // Fresh (accurate)
     try {
       const fresh = await Promise.race([
         Location.getCurrentPositionAsync({
@@ -53,26 +75,70 @@ const GMap: React.FC = () => {
           setTimeout(() => rej(new Error("loc-timeout")), 5000)
         ),
       ]);
-      setInitialRegion({
+
+      const r: Region = {
         latitude: fresh.coords.latitude,
         longitude: fresh.coords.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
-      });
+      };
+      setFirstFix(r);
       setErrorMsg(null);
-    } catch {
-      // If fresh timed out and we already showed last-known, keep it
-      if (!last) setErrorMsg("Couldn’t get location. Try again.");
+      animateTo(r, 600);
+    } catch (e) {
+      if (!firstFix) setErrorMsg("Couldn’t get location. Try again.");
     }
-    console.log("Location fetch attempt finished.");
+  };
+
+  const startWatching = async () => {
+    // stop previous watcher if any
+    watchRef.current?.remove();
+    watchRef.current = null;
+
+    watchRef.current = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Balanced,
+        distanceInterval: 5, // meters
+        timeInterval: 2000, // ms
+      },
+      (loc) => {
+        const r: Region = {
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        };
+        animateTo(r, 400);
+      }
+    );
+  };
+
+  const bootstrap = async () => {
+    const ok = await ensurePermission();
+    if (!ok) return;
+    await seedAndCenter();
+    await startWatching();
   };
 
   useEffect(() => {
-    getLocationOnce();
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") getLocationOnce(); // refresh when returning to foreground
+    // initial boot
+    bootstrap();
+
+    // refresh on foreground
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") bootstrap();
+      if (s === "background" || s === "inactive") {
+        watchRef.current?.remove();
+        watchRef.current = null;
+      }
     });
-    return () => sub.remove();
+
+    return () => {
+      sub.remove();
+      watchRef.current?.remove();
+      watchRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openSettings = () => Linking.openSettings();
@@ -81,7 +147,22 @@ const GMap: React.FC = () => {
     <SafeAreaView style={{ flex: 1 }}>
       <View style={styles.mapContainer}>
         <View style={styles.mapWrapper}>
-          {!initialRegion ? (
+          <MapView
+            ref={mapRef}
+            provider={PROVIDER_GOOGLE}
+            style={styles.map}
+            // Uncontrolled map: we set a sensible initial region, then animate the camera as location updates
+            initialRegion={firstFix ?? DEFAULT_REGION}
+            showsUserLocation
+            showsMyLocationButton
+            toolbarEnabled={false}
+            onMapReady={() => {
+              if (firstFix) animateTo(firstFix, 600);
+            }}
+          />
+
+          {/* Overlay while waiting for the first fix or showing errors */}
+          {!firstFix && (
             <View style={styles.spinnerContainer}>
               <ActivityIndicator size="large" />
               {errorMsg && (
@@ -96,24 +177,19 @@ const GMap: React.FC = () => {
                 </>
               )}
             </View>
-          ) : (
-            <MapView
-              provider={PROVIDER_GOOGLE}
-              style={styles.map}
-              initialRegion={initialRegion} // ✅ set once
-              showsUserLocation
-              showsMyLocationButton
-            />
           )}
         </View>
 
-        {/* Optional: manual refresh button */}
-        <View style={{ position: "absolute", bottom: 16, right: 16 }}>
+        {/* Recenter / refresh */}
+        <View style={{ position: "absolute", bottom: 16, right: 16, gap: 8 }}>
           <TouchableOpacity
             style={styles.settingsButton}
-            onPress={getLocationOnce}
+            onPress={seedAndCenter}
           >
-            <Text style={styles.settingsText}>Refresh Location</Text>
+            <Text style={styles.settingsText}>Recenter</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingsButton} onPress={bootstrap}>
+            <Text style={styles.settingsText}>Refresh</Text>
           </TouchableOpacity>
         </View>
       </View>

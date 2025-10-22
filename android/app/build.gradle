@@ -103,20 +103,24 @@ android {
             keyPassword 'android'
         }
     }
-    buildTypes {
+   buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
+            // TEMP for testing: sign release with the debug key
             signingConfig signingConfigs.debug
-            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
-            minifyEnabled enableProguardInReleaseBuilds
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-            crunchPngs (findProperty('android.enablePngCrunchInReleaseBuilds')?.toBoolean() ?: true)
+
+            // Optional optimizations (safe for testing)
+            minifyEnabled true
+            shrinkResources true
+            // Use the modern default ProGuard file:
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // You can drop crunchPngs (AGP handles this)
+            // crunchPngs true  // (optional)
         }
-    }
+    }////////////////////////////////////////////////////////g6GTVQ
     packagingOptions {
         jniLibs {
             useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)

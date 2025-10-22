@@ -41,55 +41,51 @@ class FallAlertService : Service() {
 
   // Called whenever the service receives a command (Intent)
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    // 1) Channel must exist before any notify/foreground call
-    Notif.ensureChannel(this)
+  // 1) Channel must exist before any notify/foreground call
+  Notif.ensureChannel(this)
 
-    // 2) Build fullscreen PI once (used for both first start and restarts)
-    val fsIntent = Intent(this, CountdownActivity::class.java)
-      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-    val fsPending = PendingIntent.getActivity(
-      this, REQUEST_FULLSCREEN, fsIntent,
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
+  // 2) Build fullscreen PI once (used for both first start and restarts)
+  val fsIntent = Intent(this, CountdownActivity::class.java)
+    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+  val fsPending = PendingIntent.getActivity(
+    this, REQUEST_FULLSCREEN, fsIntent,
+    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+  )
 
-    when (intent?.action) {
-      ACTION_SEND_NOW -> {
-        sendNow()
-        stopSelfCleanly()
-        return START_NOT_STICKY
-      }
-      ACTION_CANCEL -> {
-        stopSelfCleanly()
-        return START_NOT_STICKY
-      }
-      ACTION_START -> {
-        // 3) FIRST start path: promote to foreground immediately (required on API 26+)
-        val notif = buildNotification(remaining = null, fsPending = fsPending)
-        startForeground(NOTIF_ID, notif)
-
-        // 4) Kick off countdown
-        val secs = intent.getIntExtra(EXTRA_SECONDS, 10)
-        resetCountdown(secs)
-        return START_STICKY
-      }
+  when (intent?.action) {
+    ACTION_SEND_NOW -> {
+      sendNow()
+      stopSelfCleanly()
+      return START_NOT_STICKY
     }
+    ACTION_CANCEL -> {
+      stopSelfCleanly()
+      return START_NOT_STICKY
+    }
+    ACTION_START -> {
+      // FIRST start path: promote to foreground immediately (required on API 26+)
+      val notif = buildNotification(remaining = null, fsPending = fsPending)
+      startForeground(NOTIF_ID, notif)
 
-    // 5) Null-intent restart (system restarted sticky service) OR started with no action:
-    val notif = buildNotification(remaining = null, fsPending = fsPending)
-    startForeground(NOTIF_ID, notif)      // ensure we're in foreground again
-    if (!running) resetCountdown(10)      // optional: restart countdown if not already running
-    return START_STICKY
+      // (Optional) if the phone is locked, try to bring the UI up
+      try {
+        val km = getSystemService(KeyguardManager::class.java)
+        if (km?.isKeyguardLocked == true) startActivity(fsIntent)
+      } catch (_: Throwable) {}
+
+      // Kick off countdown
+      val secs = intent.getIntExtra(EXTRA_SECONDS, 10)
+      resetCountdown(secs)
+      return START_STICKY
+    }
   }
-    // If phone is locked, try to show activity directly (some OEMs block fullscreen)
-    try {
-      val km = getSystemService(KeyguardManager::class.java)
-      if (km?.isKeyguardLocked == true) startActivity(fsIntent)
-    } catch (_: Throwable) {}
 
-    if (!running) resetCountdown(10) // Start countdown if not running
-    return START_STICKY
-  }
-
+  // Null-intent restart (system restarted sticky service) OR started with no action:
+  val notif = buildNotification(remaining = null, fsPending = fsPending)
+  startForeground(NOTIF_ID, notif) // ensure we're in foreground again
+  if (!running) resetCountdown(10) // optional: restart countdown if not already running
+  return START_STICKY
+}
   // Restart countdown with new value
   private fun resetCountdown(newSeconds: Int = 10) {
     handler.removeCallbacks(ticker) // Cancel old runnable
@@ -133,15 +129,16 @@ class FallAlertService : Service() {
     // Button: "Send now"
     val sendNowPI = PendingIntent.getService(
       this, 1,
-      Intent(this, FallAlertService::class.java).setAction(ACTION_SEND_NOW),
-      flags
+      Intent(this, FallAlertService::class.java).apply { action = ACTION_SEND_NOW },
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
-    // Button: "Cancel"
+
     val cancelPI = PendingIntent.getService(
       this, 2,
-      Intent(this, FallAlertService::class.java).setAction(ACTION_CANCEL),
-      flags
+      Intent(this, FallAlertService::class.java).apply { action = ACTION_CANCEL },
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
+
 
     return NotificationCompat.Builder(this, Notif.CHANNEL_ID)
       .setSmallIcon(android.R.drawable.stat_sys_warning) // TODO replace with custom icon
@@ -187,3 +184,4 @@ class FallAlertService : Service() {
 
   // Not a bound service
   override fun onBind(intent: Intent?): IBinder? = null
+}

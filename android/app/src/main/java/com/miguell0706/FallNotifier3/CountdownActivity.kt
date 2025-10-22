@@ -1,3 +1,5 @@
+package com.miguell0706.FallNotifier3 // Declares the package (namespace) this file belongs to
+
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent

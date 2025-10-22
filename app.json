@@ -44,6 +44,12 @@
       "expo-notifications",
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow FallNotifier3 to access your location."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/FallNotifierSplash.png",
@@ -55,7 +61,6 @@
           }
         }
       ],
-
       "expo-web-browser"
     ],
     "experiments": {
