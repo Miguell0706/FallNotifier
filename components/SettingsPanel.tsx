@@ -193,10 +193,10 @@ const makeStyles = (fs: (n: number) => number) =>
       backgroundColor: "rgba(255,255,255,0.06)",
     },
     stepBtnLabel: {
-      fontSize: fs ? fs(20) : 20,
+      fontSize: fs(20),
       fontWeight: "800",
       color: COLORS.text,
-      lineHeight: fs ? fs(22) : 22,
+      lineHeight: fs(22),
     },
     stepDisplay: {
       flex: 1,
@@ -330,7 +330,13 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
 
   function Back({ onPress }: { onPress: () => void }) {
     return (
-      <Pressable onPress={onPress} style={styles.backBtn}>
+      <Pressable
+        onPress={onPress}
+        style={styles.backBtn}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
         <Text style={styles.backText}>‹ Back</Text>
       </Pressable>
     );
@@ -360,11 +366,18 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     </View>
   );
 
-  const clamp = (n: number, lo = 0, hi = 10) => Math.max(lo, Math.min(hi, n));
+  const clampCountdown = (n: number) => Math.max(0, Math.min(60, n));
+  const clampSensitivity = (n: number) => Math.max(1, Math.min(10, n));
+  const incCountdown = () =>
+    setCountdownSec((prev) => clampCountdown((prev ?? 0) + 1));
 
-  const incCountdown = () => setCountdownSec((prev) => clamp((prev ?? 0) + 1));
+  const decCountdown = () =>
+    setCountdownSec((prev) => clampCountdown((prev ?? 0) - 1));
+  const incSensitivity = () =>
+    setSensitivity((prev) => clampSensitivity((prev ?? 1) + 1));
 
-  const decCountdown = () => setCountdownSec((prev) => clamp((prev ?? 0) - 1));
+  const decSensitivity = () =>
+    setSensitivity((prev) => clampSensitivity((prev ?? 1) - 1));
   const MessageAndCountdown = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Message & Countdown</Text>
@@ -406,10 +419,14 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
             <TextInput
               value={String(countdownSec)}
               onChangeText={(t) => {
-                const n = clamp(parseInt(t || "0", 10) || 0);
-                setCountdownSec(n);
+                const parsed = parseInt(t, 10);
+                if (!Number.isNaN(parsed)) {
+                  setCountdownSec(clampCountdown(parsed));
+                }
               }}
-              onBlur={() => setCountdownSec((v) => clamp(v))}
+              onBlur={() => {
+                setCountdownSec((v) => clampCountdown(v));
+              }}
               keyboardType="number-pad"
               style={[styles.input, styles.stepInput]}
               selectionColor={COLORS.primary}
@@ -432,73 +449,73 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     </View>
   );
 
-  const Test = () => {
-    const guard = useEnabledGuard();
+  const Test = ({ guard }: { guard: ReturnType<typeof useEnabledGuard> }) => (
+    <View style={styles.panel}>
+      <Text style={styles.sectionTitle}>Test</Text>
+      <ScrollView
+        contentContainerStyle={styles.panelBody}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.bodyText}>
+          Simulation shows your final message without sending. The Android
+          option opens your SMS app so you can tap Send.
+        </Text>
 
-    return (
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Test</Text>
-        <ScrollView style={styles.panelBody}>
-          <Text style={styles.bodyText}>
-            Simulation shows your final message without sending. The Android
-            option opens your SMS app so you can tap Send.
-          </Text>
+        {/* Simulation button */}
+        <Pressable
+          style={styles.btnGhost}
+          onPress={guard(() => {
+            const msg = messageTemplate.replace(
+              "{link}",
+              "https://maps.google.com/?q=0,0"
+            );
+            Alert.alert("Simulation (no SMS sent)", msg);
+          })}
+        >
+          <Text style={styles.btnGhostLabel}>Run Simulation (free)</Text>
+        </Pressable>
 
-          {/* Simulation button */}
-          <Pressable
-            style={styles.btnGhost}
-            onPress={guard(() => {
-              const msg = messageTemplate.replace(
-                "{link}",
-                "https://maps.google.com/?q=0,0"
+        {/* Real SMS button */}
+        <Pressable
+          style={styles.btnPrimary}
+          onPress={guard(async () => {
+            if (Platform.OS !== "android") {
+              Alert.alert(
+                "Android only",
+                "SMS sending is Android-only for now."
               );
-              Alert.alert("Simulation (no SMS sent)", msg);
-            })}
-          >
-            <Text style={styles.btnGhostLabel}>Run Simulation (free)</Text>
-          </Pressable>
+              return;
+            }
 
-          {/* Real SMS button */}
-          <Pressable
-            style={styles.btnPrimary}
-            onPress={guard(async () => {
-              if (Platform.OS !== "android") {
-                Alert.alert(
-                  "Android only",
-                  "SMS sending is Android-only for now."
-                );
-                return;
-              }
-              const { isAvailableAsync, sendSMSAsync } = await import(
-                "expo-sms"
-              );
-              const ok = await isAvailableAsync();
-              if (!ok) {
-                Alert.alert("SMS unavailable", "This device cannot send SMS.");
-                return;
-              }
-              const msg = messageTemplate.replace(
-                "{link}",
-                "https://maps.google.com/?q=0,0"
-              );
-              await sendSMSAsync(phoneNumbers, msg);
-            })}
-          >
-            <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
-          </Pressable>
-        </ScrollView>
+            const { isAvailableAsync, sendSMSAsync } = await import("expo-sms");
+            const ok = await isAvailableAsync();
+            if (!ok) {
+              Alert.alert("SMS unavailable", "This device cannot send SMS.");
+              return;
+            }
 
-        <Back onPress={() => setScreen("menu")} />
-      </View>
-    );
-  };
-  const incSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) + 1));
+            const msg = messageTemplate.replace(
+              "{link}",
+              "https://maps.google.com/?q=0,0"
+            );
+            await sendSMSAsync(phoneNumbers, msg);
+          })}
+        >
+          <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
+        </Pressable>
+      </ScrollView>
 
-  const decSensitivity = () => setSensitivity((prev) => clamp((prev ?? 1) - 1));
+      <Back onPress={() => setScreen("menu")} />
+    </View>
+  );
+
   const SensitivityPage = () => (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Sensitivity</Text>
-      <ScrollView contentContainerStyle={styles.panelBody}>
+      <ScrollView
+        contentContainerStyle={styles.panelBody}
+        keyboardShouldPersistTaps="handled"
+      >
         <Field
           label="Sensitivity (1–10)"
           hint="Higher = triggers more easily (may cause more false alarms). Lower = needs stronger motion (may miss gentle falls)."
@@ -542,55 +559,63 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>FAQ</Text>
 
-      <ScrollView contentContainerStyle={styles.panelBody}>
+      <ScrollView
+        contentContainerStyle={styles.panelBody}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.qaBlock}>
           <Text style={styles.q}>How does FallNotifier detect a fall?</Text>
           <Text style={styles.a}>
-            The app monitors your phone’s motion sensors. A sudden impact
-            followed by stillness triggers a countdown. If you don’t cancel in
-            time, an alert is sent.
+            The app continuously monitors your phone’s motion sensors. A sudden
+            impact followed by stillness triggers a countdown. If you don’t
+            cancel in time, FallNotifier automatically sends an alert message to
+            your chosen contacts.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Who gets notified if I fall?</Text>
           <Text style={styles.a}>
-            The emergency contacts you add in Settings. They’ll receive a text
-            message if a fall is detected and not cancelled.
+            The emergency contacts you’ve added in Settings. When a fall is
+            detected and not cancelled, they’ll receive a text message with your
+            alert and location.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Will it send my location?</Text>
           <Text style={styles.a}>
-            Yes. If you grant location permission, the alert includes a link to
-            your last known GPS location so contacts can find you.
+            Yes. If location permission is granted, the alert includes a Google
+            Maps link with your last known GPS coordinates so contacts can
+            quickly find you.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Does it work without internet?</Text>
           <Text style={styles.a}>
-            No. Alerts are sent by our server (via Twilio), which requires Wi-Fi
-            or mobile data. If there’s no connection at the moment of the fall,
-            the alert can’t be sent.
+            No. FallNotifier uses a secure server (via Twilio) to send your
+            alert messages, which requires Wi-Fi or mobile data. If your phone
+            is completely offline at the moment of the fall, the alert will not
+            be sent until a connection is restored.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Will it work if the app is closed?</Text>
           <Text style={styles.a}>
-            Yes. Monitoring runs in the background with a small persistent
-            notification. The countdown and alert still work even if the app UI
-            isn’t open.
+            Yes. FallNotifier runs quietly in the background with a small
+            notification while monitoring is active. Even if the main app isn’t
+            open, detection, countdown, and alerts continue to function.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Can I cancel an accidental alert?</Text>
           <Text style={styles.a}>
-            Yes. You’ll see a countdown and an “I’m OK” option. Tapping it stops
-            the alert before any message is sent.
+            Absolutely. When a potential fall is detected, you’ll see a
+            countdown screen with an “I’m OK” button. Tapping it immediately
+            cancels the alert before any message is sent.
           </Text>
         </View>
       </ScrollView>
@@ -603,12 +628,15 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Donations</Text>
 
-      <ScrollView style={styles.panelBody} contentContainerStyle={{ gap: 14 }}>
+      <ScrollView
+        contentContainerStyle={[styles.panelBody, { gap: 14 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        {" "}
         <Text style={styles.bodyText}>
           If this app helps you or someone you love, you can support its ongoing
           development here. Thank you! 🙏
         </Text>
-
         {/* Coffee / one-off tips */}
         <View style={styles.donateCard}>
           <Text style={styles.cardTitle}>One-tap tip</Text>
@@ -658,7 +686,7 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         {/* Content */}
         {screen === "menu" && <Menu />}
         {screen === "message" && <MessageAndCountdown />}
-        {screen === "test" && <Test />}
+        {screen === "test" && <Test guard={guard} />}
         {screen === "sensitivity" && <SensitivityPage />}
         {screen === "faq" && <FAQ />}
         {screen === "donate" && <Donations />}
