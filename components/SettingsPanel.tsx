@@ -635,7 +635,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         {screen === "test" && (
           <ImpactTestPanel
             styles={styles}
-            guard={guard}
             onBack={() => setScreen("menu")}
             impactOverride={sensitivityToImpactG(sensitivity)}
           />

@@ -14,12 +14,11 @@ const MIN_LOG_G = 1.4; // only log meaningful motion
 
 export default function ImpactTestPanel({
   styles,
-  guard,
   onBack,
   impactOverride, // ✅ add this
 }: {
   styles: any;
-  guard: ReturnType<typeof import("../hooks/useEnabledGuard").useEnabledGuard>;
+
   onBack: () => void;
   impactOverride?: number;
 }) {
@@ -65,7 +64,7 @@ export default function ImpactTestPanel({
     };
   }, [impactOverride]);
 
-  const start = guard(() => {
+  const start = () => {
     if (isRecording || !detectorRef.current) return;
     Accelerometer.setUpdateInterval(50);
 
@@ -94,7 +93,7 @@ export default function ImpactTestPanel({
     });
 
     setIsRecording(true);
-  });
+  };
 
   const stop = () => {
     if (subRef.current) {
