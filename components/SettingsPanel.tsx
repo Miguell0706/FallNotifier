@@ -3,11 +3,11 @@ import { BlurView } from "expo-blur";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
+import { Accelerometer } from "expo-sensors";
 import * as WebBrowser from "expo-web-browser";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { createFallDetector } from "../core/fallDetectorCore";
 import { useEnabledGuard } from "../hooks/useEnabledGuard";
 import { useAppEnabled } from "./AppEnabledProvider";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
@@ -449,65 +450,180 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     </View>
   );
 
-  const Test = ({ guard }: { guard: ReturnType<typeof useEnabledGuard> }) => (
-    <View style={styles.panel}>
-      <Text style={styles.sectionTitle}>Test</Text>
-      <ScrollView
-        contentContainerStyle={styles.panelBody}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.bodyText}>
-          Simulation shows your final message without sending. The Android
-          option opens your SMS app so you can tap Send.
-        </Text>
+  const Test = ({ guard }: { guard: ReturnType<typeof useEnabledGuard> }) => {
+    const [isRecording, setIsRecording] = useState(false);
+    const [rows, setRows] = useState<
+      { id: string; ts: number; g: number; tag?: "IMPACT" | "FALL" }[]
+    >([]);
+    const [cfg, setCfg] = useState(() => ({
+      impactG: 8,
+      stillnessG: 1.05,
+    }));
+    const detectorRef = React.useRef<ReturnType<
+      typeof createFallDetector
+    > | null>(null);
+    const subRef = React.useRef<{ remove: () => void } | null>(null);
 
-        {/* Simulation button */}
-        <Pressable
-          style={styles.btnGhost}
-          onPress={guard(() => {
-            const msg = messageTemplate.replace(
-              "{link}",
-              "https://maps.google.com/?q=0,0"
-            );
-            Alert.alert("Simulation (no SMS sent)", msg);
-          })}
-        >
-          <Text style={styles.btnGhostLabel}>Run Simulation (free)</Text>
-        </Pressable>
+    // init detector once
+    React.useEffect(() => {
+      const det = createFallDetector(() => {
+        const ts = Date.now();
+        setRows((prev) =>
+          [{ id: "fall-" + ts, ts, g: 0, tag: "FALL" as const }, ...prev].slice(
+            0,
+            60
+          )
+        );
+      });
+      detectorRef.current = det;
+      setCfg({
+        impactG: det.getConfig().impactG,
+        stillnessG: det.getConfig().stillnessG,
+      });
 
-        {/* Real SMS button */}
-        <Pressable
-          style={styles.btnPrimary}
-          onPress={guard(async () => {
-            if (Platform.OS !== "android") {
-              Alert.alert(
-                "Android only",
-                "SMS sending is Android-only for now."
-              );
-              return;
-            }
+      return () => {
+        if (subRef.current) subRef.current.remove();
+      };
+    }, []);
 
-            const { isAvailableAsync, sendSMSAsync } = await import("expo-sms");
-            const ok = await isAvailableAsync();
-            if (!ok) {
-              Alert.alert("SMS unavailable", "This device cannot send SMS.");
-              return;
-            }
+    const start = guard(() => {
+      if (isRecording) return;
+      if (!detectorRef.current) return;
 
-            const msg = messageTemplate.replace(
-              "{link}",
-              "https://maps.google.com/?q=0,0"
-            );
-            await sendSMSAsync(phoneNumbers, msg);
-          })}
-        >
-          <Text style={styles.btnPrimaryLabel}>Open SMS app (Android)</Text>
-        </Pressable>
-      </ScrollView>
+      // faster updates to match your core.rateMs ~50ms
+      Accelerometer.setUpdateInterval(50);
 
-      <Back onPress={() => setScreen("menu")} />
-    </View>
-  );
+      subRef.current = Accelerometer.addListener(({ x, y, z }) => {
+        const g = Math.sqrt(x * x + y * y + z * z); // same units the core expects
+        const det = detectorRef.current!;
+        det.onSample(g);
+
+        const impactG = det.getConfig().impactG;
+        const tag: "IMPACT" | undefined = g >= impactG ? "IMPACT" : undefined;
+        const ts = Date.now();
+
+        setRows((prev) =>
+          [
+            { id: ts.toString(), ts, g: Number(g.toFixed(2)), tag },
+            ...prev,
+          ].slice(0, 60)
+        );
+        // keep cfg in sync in case you later let user change it
+        setCfg({
+          impactG: det.getConfig().impactG,
+          stillnessG: det.getConfig().stillnessG,
+        });
+      });
+
+      setIsRecording(true);
+    });
+
+    const stop = () => {
+      if (subRef.current) {
+        subRef.current.remove();
+        subRef.current = null;
+      }
+      setIsRecording(false);
+    };
+
+    const clear = () => {
+      setRows([]);
+    };
+
+    return (
+      <View style={styles.panel}>
+        <Text style={styles.sectionTitle}>Impact Tester</Text>
+
+        <View style={[styles.panelBody, { gap: 12 }]}>
+          <Text style={styles.bodyText}>
+            Shake / bump / drop the phone a bit. We’ll show raw g values, mark
+            when you crossed the detector’s impactG, and log when the real
+            fallDetector fires.
+          </Text>
+
+          {/* controls */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              style={isRecording ? styles.btnPrimary : styles.btnPrimary}
+              onPress={isRecording ? stop : start}
+            >
+              <Text style={styles.btnPrimaryLabel}>
+                {isRecording ? "Stop" : "Start"}
+              </Text>
+            </Pressable>
+
+            <Pressable style={styles.btnGhost} onPress={clear}>
+              <Text style={styles.btnGhostLabel}>Clear</Text>
+            </Pressable>
+          </View>
+
+          {/* current config snapshot */}
+          <View
+            style={{
+              backgroundColor: "rgba(255,255,255,0.03)",
+              borderRadius: 10,
+              padding: 10,
+              gap: 4,
+            }}
+          >
+            <Text style={styles.hint}>
+              impactG: {cfg.impactG.toFixed(2)} | stillnessG:{" "}
+              {cfg.stillnessG.toFixed(2)}
+            </Text>
+            <Text style={styles.hint}>
+              A sample ≥ impactG will be marked “IMPACT”.
+            </Text>
+            <Text style={styles.hint}>
+              When the detector sees impact + stillness → “FALL”.
+            </Text>
+          </View>
+
+          {/* list */}
+          <ScrollView style={{ maxHeight: 260 }}>
+            {rows.length === 0 ? (
+              <Text style={styles.hint}>No samples yet.</Text>
+            ) : (
+              rows.map((r) => (
+                <View
+                  key={r.id}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingVertical: 6,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <Text style={[styles.bodyText, { fontSize: 13 }]}>
+                    {new Date(r.ts).toLocaleTimeString()}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.bodyText,
+                      {
+                        fontSize: 14,
+                        fontWeight: r.tag ? "700" : "400",
+                        color: r.tag === "FALL" ? "#ffb3b3" : COLORS.text,
+                      },
+                    ]}
+                  >
+                    {r.tag === "FALL"
+                      ? "FALL ✅"
+                      : r.tag === "IMPACT"
+                      ? `${r.g.toFixed(2)} g (IMPACT)`
+                      : `${r.g.toFixed(2)} g`}
+                  </Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+
+        <Back onPress={() => setScreen("menu")} />
+      </View>
+    );
+  };
 
   const SensitivityPage = () => (
     <View style={styles.panel}>
