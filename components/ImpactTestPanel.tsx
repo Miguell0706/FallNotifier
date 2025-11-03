@@ -16,10 +16,12 @@ export default function ImpactTestPanel({
   styles,
   guard,
   onBack,
+  impactOverride, // ✅ add this
 }: {
   styles: any;
   guard: ReturnType<typeof import("../hooks/useEnabledGuard").useEnabledGuard>;
   onBack: () => void;
+  impactOverride?: number;
 }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [currentG, setCurrentG] = React.useState(1.0);
@@ -37,15 +39,21 @@ export default function ImpactTestPanel({
 
   // Initialize detector
   React.useEffect(() => {
-    const det = createFallDetector(() => {
-      const ts = Date.now();
-      setRows((prev) =>
-        [{ id: "fall-" + ts, ts, g: 0, tag: "FALL" as const }, ...prev].slice(
-          0,
-          50
-        )
-      );
-    });
+    const det = createFallDetector(
+      () => {
+        const ts = Date.now();
+        setRows((prev) =>
+          [{ id: "fall-" + ts, ts, g: 0, tag: "FALL" as const }, ...prev].slice(
+            0,
+            50
+          )
+        );
+      },
+      {
+        thresholds: impactOverride ? { impactG: impactOverride } : undefined,
+      }
+    );
+
     detectorRef.current = det;
     setCfg({
       impactG: det.getConfig().impactG,
@@ -55,7 +63,7 @@ export default function ImpactTestPanel({
     return () => {
       if (subRef.current) subRef.current.remove();
     };
-  }, []);
+  }, [impactOverride]);
 
   const start = guard(() => {
     if (isRecording || !detectorRef.current) return;

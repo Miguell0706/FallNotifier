@@ -266,6 +266,12 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
+  const sensitivityToImpactG = (s: number) => {
+    const max = 9; // sensitivity 1 → needs big hit (least sensitive)
+    const min = 2.5; // sensitivity 10 → triggers easily (most sensitive)
+    const t = (s - 1) / 9; // normalize 1–10 → 0–1
+    return max - t * (max - min);
+  };
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",
@@ -632,6 +638,7 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
             styles={styles}
             guard={guard}
             onBack={() => setScreen("menu")}
+            impactOverride={sensitivityToImpactG(sensitivity)}
           />
         )}
         {screen === "sensitivity" && <SensitivityPage />}
