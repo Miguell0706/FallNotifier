@@ -579,7 +579,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         contentContainerStyle={[styles.panelBody, { gap: 14 }]}
         keyboardShouldPersistTaps="handled"
       >
-        {" "}
         <Text style={styles.bodyText}>
           If this app helps you or someone you love, you can support its ongoing
           development here. Thank you! 🙏
