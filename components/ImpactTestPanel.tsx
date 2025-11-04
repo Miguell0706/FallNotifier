@@ -110,7 +110,9 @@ export default function ImpactTestPanel({
 
   return (
     <View style={styles.panel}>
-      <Text style={styles.sectionTitle}>Impact Tester</Text>
+      <Pressable onPress={onBack} style={styles.backBtn}>
+        <Text style={styles.backText}>‹ Back</Text>
+      </Pressable>
 
       <View style={[styles.panelBody, { gap: 14 }]}>
         {/* BIG DISPLAY */}
@@ -231,10 +233,6 @@ export default function ImpactTestPanel({
           </ScrollView>
         </View>
       </View>
-
-      <Pressable onPress={onBack} style={styles.backBtn}>
-        <Text style={styles.backText}>‹ Back</Text>
-      </Pressable>
     </View>
   );
 }

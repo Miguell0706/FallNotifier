@@ -3,6 +3,7 @@ import { BlurView } from "expo-blur";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
+import { sensitivityToImpactG } from "../core/sensitivity";
 import ImpactTestPanel from "./ImpactTestPanel";
 
 import * as WebBrowser from "expo-web-browser";
@@ -17,8 +18,6 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { useEnabledGuard } from "../hooks/useEnabledGuard";
-import { useAppEnabled } from "./AppEnabledProvider";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
 
@@ -258,20 +257,12 @@ const makeStyles = (fs: (n: number) => number) =>
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [screen, setScreen] = useState<Screen>("menu");
-  const { setEnabled } = useAppEnabled();
-  const guard = useEnabledGuard();
   // Local state
   const [messageTemplate, setMessageTemplate] = useState(
     "I may have fallen. My location: {link}"
   );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
-  const sensitivityToImpactG = (s: number) => {
-    const max = 9; // sensitivity 1 → needs big hit (least sensitive)
-    const min = 2.5; // sensitivity 10 → triggers easily (most sensitive)
-    const t = (s - 1) / 9; // normalize 1–10 → 0–1
-    return max - t * (max - min);
-  };
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",

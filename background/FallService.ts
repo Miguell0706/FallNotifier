@@ -1,9 +1,13 @@
 // background/FallService.ts
 import * as Notifications from "expo-notifications";
 import { Accelerometer } from "expo-sensors";
+import { NativeModules } from "react-native";
 import BackgroundService from "react-native-background-actions";
 import { createFallDetector } from "../core/fallDetectorCore";
+import { sensitivityToImpactG } from "../core/sensitivity";
 import { getLocationSnapshot } from "../services/getLocationSnapshot"; // ⬅️ your helper
+const { FallNotifier } = NativeModules; // we'll define this in Kotlin next
+
 
 const taskOptions = {
   taskName: "Fall Notifier",
@@ -16,10 +20,15 @@ const taskOptions = {
 let accelSub: { remove: () => void } | null = null;
 let running = false;
 
-async function fallTask() {
+async function fallTask(taskData: any) {
   // guard against duplicate starts (hot reload etc.)
   if (running) return;
   running = true;
+
+  const sensitivityFromUI: number =
+    typeof taskData?.sensitivity === "number" ? taskData.sensitivity : 5;
+
+  const impactG = sensitivityToImpactG(sensitivityFromUI);
 
   const detector = createFallDetector(async () => {
     // 1) Grab a single-shot fix (fast fallback to last-known inside helper)
@@ -38,14 +47,9 @@ async function fallTask() {
       trigger: null,
     });
 
-    // 3) OPTIONAL: call your server to send SMS via Twilio (background-safe).
-    // NOTE: expo-sms opens the composer UI and won’t auto-send from background.
-    // await fetch("https://your.api/fall-alert", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ link, accuracy: fix?.accuracy }),
-    // });
-  }, { debug: false });
+  }, { debug: false,
+    thresholds: { impactG },
+   });
 
   await Accelerometer.setUpdateInterval(detector.getConfig().rateMs);
 
@@ -61,8 +65,11 @@ async function fallTask() {
   }
 }
 
-export async function startFallService() {
-  await BackgroundService.start(fallTask, taskOptions);
+export async function startFallService(sensitivity: number) {
+  await BackgroundService.start(fallTask, {
+    ...taskOptions,
+    parameters: { sensitivity },
+  });
 }
 
 export async function stopFallService() {
