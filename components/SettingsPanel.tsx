@@ -3,9 +3,6 @@ import { BlurView } from "expo-blur";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
-import { sensitivityToImpactG } from "../core/sensitivity";
-import ImpactTestPanel from "./ImpactTestPanel";
-
 import * as WebBrowser from "expo-web-browser";
 import React, { useMemo, useState } from "react";
 import {
@@ -18,6 +15,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { startFallService, stopFallService } from "../background/FallService";
+import { sensitivityToImpactG } from "../core/sensitivity";
+import { useAppEnabled } from "./AppEnabledProvider";
+import ImpactTestPanel from "./ImpactTestPanel";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
 
@@ -257,12 +258,25 @@ const makeStyles = (fs: (n: number) => number) =>
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [screen, setScreen] = useState<Screen>("menu");
-  // Local state
   const [messageTemplate, setMessageTemplate] = useState(
     "I may have fallen. My location: {link}"
   );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
+
+  const { enabled } = useAppEnabled();
+
+  React.useEffect(() => {
+    if (!enabled) return; // only when guard is ON
+
+    const t = setTimeout(() => {
+      // restart background service with new sensitivity
+      stopFallService().then(() => startFallService(sensitivity));
+    }, 400); // small delay so it doesn't restart too aggressively
+
+    return () => clearTimeout(t);
+  }, [enabled, sensitivity]);
+
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",

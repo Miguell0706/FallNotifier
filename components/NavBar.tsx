@@ -36,7 +36,11 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
     inputRange: [0, 1],
     outputRange: ["0deg", "160deg"],
   });
-
+  const handleToggle = (next: boolean) => {
+    if (!hydrated) return;
+    console.log("handleToggle", next);
+    setEnabled(next);
+  };
   return (
     <View style={styles.nav}>
       <View style={styles.titleContainer}>
@@ -51,7 +55,7 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
         <View style={styles.switchBlock}>
           <Switch
             value={enabled}
-            onValueChange={setEnabled}
+            onValueChange={handleToggle}
             disabled={!hydrated}
             accessibilityLabel={enabled ? "Disable alerts" : "Enable alerts"}
           />

@@ -25,10 +25,16 @@ async function fallTask(taskData: any) {
   if (running) return;
   running = true;
 
-  const sensitivityFromUI: number =
-    typeof taskData?.sensitivity === "number" ? taskData.sensitivity : 5;
+  console.log("[FallService] fallTask started with taskData:", taskData);
+
+  if (typeof taskData?.sensitivity !== "number") {
+    console.warn("[FallService] No sensitivity provided, skipping start.");
+    return;
+  }
+  const sensitivityFromUI = taskData.sensitivity;
 
   const impactG = sensitivityToImpactG(sensitivityFromUI);
+  console.log("[FallService] Using impactG =", impactG);
 
   const detector = createFallDetector(async () => {
     // 1) Grab a single-shot fix (fast fallback to last-known inside helper)
@@ -66,6 +72,7 @@ async function fallTask(taskData: any) {
 }
 
 export async function startFallService(sensitivity: number) {
+  console.log("[FallService] startFallService called with sensitivity:", sensitivity);
   await BackgroundService.start(fallTask, {
     ...taskOptions,
     parameters: { sensitivity },
