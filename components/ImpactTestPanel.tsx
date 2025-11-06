@@ -1,7 +1,11 @@
-import { Accelerometer } from "expo-sensors";
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { createFallDetector } from "../core/fallDetectorCore";
+import {
+  FallEngineEvent,
+  getFallEngineConfig,
+  isFallEngineRunning,
+  subscribeToFallEngine,
+} from "../core/fallEngine";
 
 type ImpactRow = {
   id: string;
@@ -15,12 +19,9 @@ const MIN_LOG_G = 1.4; // only log meaningful motion
 export default function ImpactTestPanel({
   styles,
   onBack,
-  impactOverride, // ✅ add this
 }: {
   styles: any;
-
   onBack: () => void;
-  impactOverride?: number;
 }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [currentG, setCurrentG] = React.useState(1.0);
@@ -31,73 +32,86 @@ export default function ImpactTestPanel({
     stillnessG: 1.05,
   }));
 
-  const detectorRef = React.useRef<ReturnType<
-    typeof createFallDetector
-  > | null>(null);
-  const subRef = React.useRef<{ remove: () => void } | null>(null);
+  const subRef = React.useRef<null | (() => void)>(null);
 
-  // Initialize detector
+  // Load engine config once (after service has started engine)
   React.useEffect(() => {
-    const det = createFallDetector(
-      () => {
-        const ts = Date.now();
-        setRows((prev) =>
-          [{ id: "fall-" + ts, ts, g: 0, tag: "FALL" as const }, ...prev].slice(
-            0,
-            50
-          )
-        );
-      },
-      {
-        thresholds: impactOverride ? { impactG: impactOverride } : undefined,
-      }
-    );
+    const engineCfg = getFallEngineConfig();
+    if (engineCfg) {
+      setCfg({
+        impactG: engineCfg.impactG,
+        stillnessG: engineCfg.stillnessG,
+      });
+    } else {
+      console.warn(
+        "[ImpactTestPanel] fall engine config not available. Is detection enabled?"
+      );
+    }
+  }, []);
 
-    detectorRef.current = det;
-    setCfg({
-      impactG: det.getConfig().impactG,
-      stillnessG: det.getConfig().stillnessG,
-    });
+  const handleEvent = React.useCallback((event: FallEngineEvent) => {
+    if (event.type === "sample") {
+      const gRounded = Number(event.g.toFixed(2));
+      setCurrentG(gRounded);
+      setPeakG((prev) => (gRounded > prev ? gRounded : prev));
 
-    return () => {
-      if (subRef.current) subRef.current.remove();
-    };
-  }, [impactOverride]);
-
-  const start = () => {
-    if (isRecording || !detectorRef.current) return;
-    Accelerometer.setUpdateInterval(50);
-
-    subRef.current = Accelerometer.addListener(({ x, y, z }) => {
-      const g = Math.sqrt(x * x + y * y + z * z);
-      const det = detectorRef.current!;
-      det.onSample(g);
-
-      setCurrentG(Number(g.toFixed(2)));
-      setPeakG((prev) => (g > prev ? Number(g.toFixed(2)) : prev));
-
-      const impactG = det.getConfig().impactG;
-      const isImpact = g >= impactG;
-      const ts = Date.now();
-
-      // Only log spikes
-      if (g >= MIN_LOG_G || isImpact) {
-        const tag: "IMPACT" | undefined = isImpact ? "IMPACT" : undefined;
+      if (gRounded >= MIN_LOG_G) {
         setRows((prev) =>
           [
-            { id: ts.toString(), ts, g: Number(g.toFixed(2)), tag },
+            {
+              id: String(event.ts),
+              ts: event.ts,
+              g: gRounded,
+            },
             ...prev,
           ].slice(0, 50)
         );
       }
-    });
+    } else if (event.type === "impact") {
+      const gRounded = Number(event.g.toFixed(2));
+      setRows((prev) =>
+        [
+          {
+            id: "impact-" + event.ts,
+            ts: event.ts,
+            g: gRounded,
+            tag: "IMPACT" as const, // 👈 important
+          },
+          ...prev,
+        ].slice(0, 50)
+      );
+    } else if (event.type === "fall") {
+      setRows((prev) =>
+        [
+          {
+            id: "fall-" + event.ts,
+            ts: event.ts,
+            g: 0,
+            tag: "FALL" as const, // 👈 important
+          },
+          ...prev,
+        ].slice(0, 50)
+      );
+    }
+  }, []);
 
+  const start = () => {
+    if (isRecording) return;
+
+    if (!isFallEngineRunning()) {
+      console.warn(
+        "[ImpactTestPanel] fall engine is not running; make sure detection is enabled in the main UI."
+      );
+    }
+
+    const unsub = subscribeToFallEngine(handleEvent);
+    subRef.current = unsub;
     setIsRecording(true);
   };
 
   const stop = () => {
     if (subRef.current) {
-      subRef.current.remove();
+      subRef.current();
       subRef.current = null;
     }
     setIsRecording(false);
@@ -177,7 +191,7 @@ export default function ImpactTestPanel({
             Logging ≥ {MIN_LOG_G.toFixed(1)} g (and all impacts)
           </Text>
           <Text style={styles.hint}>
-            impactG (detector): {cfg.impactG.toFixed(2)} g
+            impactG (engine): {cfg.impactG.toFixed(2)} g
           </Text>
           <Text style={styles.hint}>
             stillnessG: {cfg.stillnessG.toFixed(2)} g

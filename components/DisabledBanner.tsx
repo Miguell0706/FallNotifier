@@ -29,8 +29,8 @@ export default function DisabledBanner() {
     >
       <View style={styles.banner} accessibilityRole="alert">
         <Text style={styles.text}>
-          Alerts are <Text style={styles.bold}>OFF</Text>. Test/real messages
-          and countdown are disabled.
+          Alerts are <Text style={styles.bold}>OFF</Text>. Messages and
+          countdown are disabled.
         </Text>
       </View>
     </Animated.View>

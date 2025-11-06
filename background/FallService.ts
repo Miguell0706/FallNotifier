@@ -1,13 +1,16 @@
 // background/FallService.ts
 import * as Notifications from "expo-notifications";
-import { Accelerometer } from "expo-sensors";
 import { NativeModules } from "react-native";
 import BackgroundService from "react-native-background-actions";
-import { createFallDetector } from "../core/fallDetectorCore";
-import { sensitivityToImpactG } from "../core/sensitivity";
-import { getLocationSnapshot } from "../services/getLocationSnapshot"; // ⬅️ your helper
-const { FallNotifier } = NativeModules; // we'll define this in Kotlin next
+import {
+  FallEngineEvent,
+  startFallEngine,
+  stopFallEngine,
+  subscribeToFallEngine,
+} from "../core/fallEngine";
+import { getLocationSnapshot } from "../services/getLocationSnapshot";
 
+const { FallNotifier } = NativeModules; // still here if you use it later
 
 const taskOptions = {
   taskName: "Fall Notifier",
@@ -17,11 +20,10 @@ const taskOptions = {
   parameters: {},
 };
 
-let accelSub: { remove: () => void } | null = null;
 let running = false;
+let engineUnsub: (() => void) | null = null;
 
 async function fallTask(taskData: any) {
-  // guard against duplicate starts (hot reload etc.)
   if (running) return;
   running = true;
 
@@ -29,39 +31,48 @@ async function fallTask(taskData: any) {
 
   if (typeof taskData?.sensitivity !== "number") {
     console.warn("[FallService] No sensitivity provided, skipping start.");
+    running = false;
     return;
   }
   const sensitivityFromUI = taskData.sensitivity;
 
-  const impactG = sensitivityToImpactG(sensitivityFromUI);
-  console.log("[FallService] Using impactG =", impactG);
+  // 1) Start shared engine
+  await startFallEngine(sensitivityFromUI);
 
-  const detector = createFallDetector(async () => {
-    // 1) Grab a single-shot fix (fast fallback to last-known inside helper)
-    const fix = await getLocationSnapshot(5000); // 5s timeout
-    const link = fix ? `https://maps.google.com/?q=${fix.lat},${fix.lng}` : "Location unavailable";
+  // 2) Subscribe to FALL events from engine
+  if (engineUnsub) {
+    engineUnsub();
+    engineUnsub = null;
+  }
 
-    // 2) Notify locally (so the user sees *something* even if app is backgrounded)
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Fall detected",
-        body: fix
-          ? `Location link ready: ${link}`
-          : "Could not get location in time.",
-        data: { link, ts: fix?.ts },
-      },
-      trigger: null,
-    });
+  engineUnsub = subscribeToFallEngine(async (event: FallEngineEvent) => {
+    if (event.type !== "fall") return;
 
-  }, { debug: false,
-    thresholds: { impactG },
-   });
+    console.log("[FallService] FALL from engine at", event.ts);
 
-  await Accelerometer.setUpdateInterval(detector.getConfig().rateMs);
+    try {
+      // 1) Grab location
+      const fix = await getLocationSnapshot(5000);
+      const link = fix
+        ? `https://maps.google.com/?q=${fix.lat},${fix.lng}`
+        : "Location unavailable";
 
-  accelSub = Accelerometer.addListener(({ x, y, z }) => {
-    const g = Math.sqrt(x * x + y * y + z * z);
-    detector.onSample(g);
+      // 2) Local notification
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Fall detected",
+          body: fix
+            ? `Location link ready: ${link}`
+            : "Could not get location in time.",
+          data: { link, ts: fix?.ts },
+        },
+        trigger: null,
+      });
+
+      console.log("[FallService] Expo notification scheduled ✅");
+    } catch (e) {
+      console.log("[FallService] ERROR scheduling notification", e);
+    }
   });
 
   // keep foreground service alive
@@ -80,8 +91,14 @@ export async function startFallService(sensitivity: number) {
 }
 
 export async function stopFallService() {
-  try { accelSub?.remove?.(); } catch {}
-  accelSub = null;
+  console.log("[FallService] stopFallService");
+  try {
+    engineUnsub?.();
+    engineUnsub = null;
+    await stopFallEngine();
+  } catch (e) {
+    console.warn("[FallService] error stopping engine", e);
+  }
   running = false;
   await BackgroundService.stop();
 }

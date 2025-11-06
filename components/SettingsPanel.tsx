@@ -521,16 +521,16 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
             The app continuously monitors your phone’s motion sensors. A sudden
             impact followed by stillness triggers a countdown. If you don’t
             cancel in time, FallNotifier automatically sends an alert message to
-            your chosen contacts.
+            your chosen numbers.
           </Text>
         </View>
 
         <View style={styles.qaBlock}>
           <Text style={styles.q}>Who gets notified if I fall?</Text>
           <Text style={styles.a}>
-            The emergency contacts you’ve added in Settings. When a fall is
-            detected and not cancelled, they’ll receive a text message with your
-            alert and location.
+            The emergency contacts you’ve added in the numbers list on the left.
+            When a fall is detected and not cancelled, they’ll receive a text
+            message with your alert and location.
           </Text>
         </View>
 
