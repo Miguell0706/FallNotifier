@@ -45,35 +45,38 @@ async function fallTask(taskData: any) {
     engineUnsub = null;
   }
 
-  engineUnsub = subscribeToFallEngine(async (event: FallEngineEvent) => {
-    if (event.type !== "fall") return;
+ engineUnsub = subscribeToFallEngine(async (event: FallEngineEvent) => {
+  if (event.type !== "fall") return;
 
-    console.log("[FallService] FALL from engine at", event.ts);
+  console.log("[FallService] FALL from engine at", event.ts);
 
-    try {
-      // 1) Grab location
-      const fix = await getLocationSnapshot(5000);
-      const link = fix
-        ? `https://maps.google.com/?q=${fix.lat},${fix.lng}`
-        : "Location unavailable";
+  try {
+    console.log("[FallService] Before getLocationSnapshot");
+    const fix = await getLocationSnapshot(5000);
+    console.log("[FallService] After getLocationSnapshot", fix);
 
-      // 2) Local notification
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "Fall detected",
-          body: fix
-            ? `Location link ready: ${link}`
-            : "Could not get location in time.",
-          data: { link, ts: fix?.ts },
-        },
-        trigger: null,
-      });
+    const link = fix
+      ? `https://maps.google.com/?q=${fix.lat},${fix.lng}`
+      : "Location unavailable";
 
-      console.log("[FallService] Expo notification scheduled ✅");
-    } catch (e) {
-      console.log("[FallService] ERROR scheduling notification", e);
-    }
+    console.log("[FallService] Before scheduleNotificationAsync");
+
+    await Notifications.scheduleNotificationAsync({
+    content: {
+      title: "Fall detected",
+      body: fix
+        ? `Location link ready: ${link}`
+        : "Could not get location in time.",
+      data: { link, ts: fix?.ts },
+    },
+    trigger: null,
   });
+    console.log("[FallService] Expo notification scheduled ✅");
+  } catch (e) {
+    console.log("[FallService] ERROR scheduling notification", e);
+  }
+});
+
 
   // keep foreground service alive
   // eslint-disable-next-line no-constant-condition
