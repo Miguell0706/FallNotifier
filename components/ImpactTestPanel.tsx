@@ -4,6 +4,8 @@ import {
   FallEngineEvent,
   getFallEngineConfig,
   isFallEngineRunning,
+  startFallEngine,
+  stopFallEngine,
   subscribeToFallEngine,
 } from "../core/fallEngine";
 
@@ -15,6 +17,7 @@ type ImpactRow = {
 };
 
 const MIN_LOG_G = 1.4; // only log meaningful motion
+const TEST_SENSITIVITY = 9; // fallback sensitivity when guard is OFF
 
 export default function ImpactTestPanel({
   styles,
@@ -31,10 +34,17 @@ export default function ImpactTestPanel({
     impactG: 8,
     stillnessG: 1.05,
   }));
+  const [startedLocally, setStartedLocally] = React.useState(false);
 
   const subRef = React.useRef<null | (() => void)>(null);
+  const startedLocallyRef = React.useRef(false);
 
-  // Load engine config once (after service has started engine)
+  // keep ref in sync with state for cleanup
+  React.useEffect(() => {
+    startedLocallyRef.current = startedLocally;
+  }, [startedLocally]);
+
+  // Load engine config once (after service or panel has started engine)
   React.useEffect(() => {
     const engineCfg = getFallEngineConfig();
     if (engineCfg) {
@@ -44,9 +54,20 @@ export default function ImpactTestPanel({
       });
     } else {
       console.warn(
-        "[ImpactTestPanel] fall engine config not available. Is detection enabled?"
+        "[ImpactTestPanel] fall engine config not available. Is detection enabled or test started?"
       );
     }
+
+    return () => {
+      // cleanup on unmount
+      if (subRef.current) {
+        subRef.current();
+        subRef.current = null;
+      }
+      if (startedLocallyRef.current) {
+        stopFallEngine().catch(() => {});
+      }
+    };
   }, []);
 
   const handleEvent = React.useCallback((event: FallEngineEvent) => {
@@ -75,7 +96,7 @@ export default function ImpactTestPanel({
             id: "impact-" + event.ts,
             ts: event.ts,
             g: gRounded,
-            tag: "IMPACT" as const, // 👈 important
+            tag: "IMPACT" as const,
           },
           ...prev,
         ].slice(0, 50)
@@ -87,7 +108,7 @@ export default function ImpactTestPanel({
             id: "fall-" + event.ts,
             ts: event.ts,
             g: 0,
-            tag: "FALL" as const, // 👈 important
+            tag: "FALL" as const,
           },
           ...prev,
         ].slice(0, 50)
@@ -95,12 +116,29 @@ export default function ImpactTestPanel({
     }
   }, []);
 
-  const start = () => {
+  const start = async () => {
     if (isRecording) return;
 
+    // If engine is not running, start it in "test mode"
     if (!isFallEngineRunning()) {
-      console.warn(
-        "[ImpactTestPanel] fall engine is not running; make sure detection is enabled in the main UI."
+      console.log(
+        "[ImpactTestPanel] Engine not running; starting in TEST mode with sensitivity",
+        TEST_SENSITIVITY
+      );
+      await startFallEngine(TEST_SENSITIVITY, { testMode: true });
+      setStartedLocally(true);
+
+      // refresh config after starting
+      const engineCfg = getFallEngineConfig();
+      if (engineCfg) {
+        setCfg({
+          impactG: engineCfg.impactG,
+          stillnessG: engineCfg.stillnessG,
+        });
+      }
+    } else {
+      console.log(
+        "[ImpactTestPanel] Engine already running; subscribing only (REAL mode)"
       );
     }
 
@@ -109,12 +147,19 @@ export default function ImpactTestPanel({
     setIsRecording(true);
   };
 
-  const stop = () => {
+  const stop = async () => {
     if (subRef.current) {
       subRef.current();
       subRef.current = null;
     }
     setIsRecording(false);
+
+    // If we started the engine for test mode, stop it again
+    if (startedLocallyRef.current) {
+      console.log("[ImpactTestPanel] Stopping engine started in TEST mode");
+      await stopFallEngine();
+      setStartedLocally(false);
+    }
   };
 
   const clear = () => {

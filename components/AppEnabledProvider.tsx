@@ -7,7 +7,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-
+import { startFallService, stopFallService } from "../background/FallService";
 const STORAGE_KEY = "appEnabled:v1";
 
 type Setter = boolean | ((prev: boolean) => boolean);
@@ -52,6 +52,16 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
           ? (updater as (p: boolean) => boolean)(prev)
           : updater;
       AsyncStorage.setItem(STORAGE_KEY, next ? "1" : "0").catch(() => {});
+
+      // 👇 Add this:
+      if (next && !prev) {
+        // turned ON
+        startFallService(8); // or pull the sensitivity from your settings
+      } else if (!next && prev) {
+        // turned OFF
+        stopFallService();
+      }
+
       return next;
     });
   }, []);
