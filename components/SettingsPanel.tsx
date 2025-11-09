@@ -1,4 +1,5 @@
 // components/SettingsPanel.tsx
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,7 +17,6 @@ import {
   View,
 } from "react-native";
 import { startFallService, stopFallService } from "../background/FallService";
-import { sensitivityToImpactG } from "../core/sensitivity";
 import { useAppEnabled } from "./AppEnabledProvider";
 import ImpactTestPanel from "./ImpactTestPanel";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
@@ -42,6 +42,7 @@ const SHADOW = {
   shadowOffset: { width: 0, height: 8 },
   elevation: 8,
 };
+const SENSITIVITY_KEY = "sensitivity:v1";
 
 /* ---------- styles factory (uses fs for responsive fonts) ---------- */
 const makeStyles = (fs: (n: number) => number) =>
@@ -263,9 +264,25 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
+  const [hydrated, setHydrated] = useState(false);
 
   const { enabled } = useAppEnabled();
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SENSITIVITY_KEY);
+        if (raw) setSensitivity(Number(raw));
+      } finally {
+        setHydrated(true);
+      }
+    })();
+  }, []);
 
+  // Whenever sensitivity changes, persist it
+  React.useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(SENSITIVITY_KEY, String(sensitivity)).catch(() => {});
+  }, [sensitivity, hydrated]);
   React.useEffect(() => {
     if (!enabled) return; // only when guard is ON
 
@@ -638,11 +655,7 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         {screen === "menu" && <Menu />}
         {screen === "message" && <MessageAndCountdown />}
         {screen === "test" && (
-          <ImpactTestPanel
-            styles={styles}
-            onBack={() => setScreen("menu")}
-            impactOverride={sensitivityToImpactG(sensitivity)}
-          />
+          <ImpactTestPanel styles={styles} onBack={() => setScreen("menu")} />
         )}
         {screen === "sensitivity" && <SensitivityPage />}
         {screen === "faq" && <FAQ />}
