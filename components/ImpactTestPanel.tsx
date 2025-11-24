@@ -1,13 +1,13 @@
 import React from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
-  FallEngineEvent,
-  getFallEngineConfig,
-  isFallEngineRunning,
-  startFallEngine,
-  stopFallEngine,
-  subscribeToFallEngine,
-} from "../core/fallEngine";
+  FALL_FALL,
+  FALL_IMPACT,
+  FALL_SAMPLE,
+  fallEmitter,
+  startFallService,
+  stopFallService,
+} from "../core/FallBridge";
 
 type ImpactRow = {
   id: string;
@@ -17,7 +17,7 @@ type ImpactRow = {
 };
 
 const MIN_LOG_G = 1.4; // only log meaningful motion
-const TEST_SENSITIVITY = 9; // fallback sensitivity when guard is OFF
+const TEST_SENSITIVITY = 7; // tweak as needed
 
 export default function ImpactTestPanel({
   styles,
@@ -30,136 +30,135 @@ export default function ImpactTestPanel({
   const [currentG, setCurrentG] = React.useState(1.0);
   const [peakG, setPeakG] = React.useState(1.0);
   const [rows, setRows] = React.useState<ImpactRow[]>([]);
-  const [cfg, setCfg] = React.useState(() => ({
-    impactG: 8,
+  const [cfg] = React.useState(() => ({
+    impactG: 8, // just display defaults for now
     stillnessG: 1.05,
   }));
-  const [startedLocally, setStartedLocally] = React.useState(false);
 
-  const subRef = React.useRef<null | (() => void)>(null);
-  const startedLocallyRef = React.useRef(false);
+  // SAMPLE handler
+  // SAMPLE handler
+  // SAMPLE handler
+  const handleSample = React.useCallback((e: { g: number; ts: number }) => {
+    const gRounded = Number(e.g.toFixed(2));
+    setCurrentG(gRounded);
+    setPeakG((prev) => (gRounded > prev ? gRounded : prev));
 
-  // keep ref in sync with state for cleanup
-  React.useEffect(() => {
-    startedLocallyRef.current = startedLocally;
-  }, [startedLocally]);
+    // Only log & store when it's above our min G
+    if (gRounded >= MIN_LOG_G) {
+      console.log("[ImpactTestPanel] SAMPLE event (logged)", e);
 
-  // Load engine config once (after service or panel has started engine)
-  React.useEffect(() => {
-    const engineCfg = getFallEngineConfig();
-    if (engineCfg) {
-      setCfg({
-        impactG: engineCfg.impactG,
-        stillnessG: engineCfg.stillnessG,
+      const id = `sample-${e.ts}`;
+      setRows((prev) => {
+        const withoutDup = prev.filter((r) => r.id !== id);
+        return [
+          {
+            id,
+            ts: e.ts,
+            g: gRounded,
+          },
+          ...withoutDup,
+        ].slice(0, 50);
       });
-    } else {
-      console.warn(
-        "[ImpactTestPanel] fall engine config not available. Is detection enabled or test started?"
-      );
     }
+  }, []);
+
+  // IMPACT handler
+  const handleImpact = React.useCallback((e: { g: number; ts: number }) => {
+    const gRounded = Number(e.g.toFixed(2));
+
+    console.log("[ImpactTestPanel] IMPACT event", e);
+
+    const id = `impact-${e.ts}`;
+    setRows((prev) => {
+      const withoutDup = prev.filter((r) => r.id !== id);
+      return [
+        {
+          id,
+          ts: e.ts,
+          g: gRounded,
+          tag: "IMPACT" as const,
+        },
+        ...withoutDup,
+      ].slice(0, 50);
+    });
+  }, []);
+
+  // FALL handler
+  const handleFall = React.useCallback((e: { ts: number }) => {
+    console.log("[ImpactTestPanel] FALL event", e);
+
+    const id = `fall-${e.ts}`;
+    setRows((prev) => {
+      const withoutDup = prev.filter((r) => r.id !== id);
+      return [
+        {
+          id,
+          ts: e.ts,
+          g: 0,
+          tag: "FALL" as const,
+        },
+        ...withoutDup,
+      ].slice(0, 50);
+    });
+  }, []);
+
+  // Subscribe/unsubscribe based on isRecording
+  React.useEffect(() => {
+    if (!isRecording) {
+      console.log("[ImpactTestPanel] not recording, skip subscribe");
+      return;
+    }
+
+    console.log("[ImpactTestPanel] isRecording =", isRecording);
+    console.log("[ImpactTestPanel] fallEmitter =", fallEmitter);
+
+    if (!fallEmitter) {
+      console.warn(
+        "[ImpactTestPanel] fallEmitter is null – native events not available"
+      );
+      return;
+    }
+
+    console.log(
+      "[ImpactTestPanel] Subscribing to",
+      FALL_SAMPLE,
+      FALL_IMPACT,
+      FALL_FALL
+    );
+
+    const sampleSub = fallEmitter.addListener(FALL_SAMPLE, handleSample);
+    const impactSub = fallEmitter.addListener(FALL_IMPACT, handleImpact);
+    const fallSub = fallEmitter.addListener(FALL_FALL, handleFall);
 
     return () => {
-      // cleanup on unmount
-      if (subRef.current) {
-        subRef.current();
-        subRef.current = null;
-      }
-      if (startedLocallyRef.current) {
-        stopFallEngine().catch(() => {});
-      }
+      sampleSub.remove();
+      impactSub.remove();
+      fallSub.remove();
+      console.log("[ImpactTestPanel] Unsubscribed from native fall events");
     };
-  }, []);
+  }, [isRecording, handleSample, handleImpact, handleFall]);
 
-  const handleEvent = React.useCallback((event: FallEngineEvent) => {
-    if (event.type === "sample") {
-      const gRounded = Number(event.g.toFixed(2));
-      setCurrentG(gRounded);
-      setPeakG((prev) => (gRounded > prev ? gRounded : prev));
-
-      if (gRounded >= MIN_LOG_G) {
-        setRows((prev) =>
-          [
-            {
-              id: String(event.ts),
-              ts: event.ts,
-              g: gRounded,
-            },
-            ...prev,
-          ].slice(0, 50)
-        );
-      }
-    } else if (event.type === "impact") {
-      const gRounded = Number(event.g.toFixed(2));
-      setRows((prev) =>
-        [
-          {
-            id: "impact-" + event.ts,
-            ts: event.ts,
-            g: gRounded,
-            tag: "IMPACT" as const,
-          },
-          ...prev,
-        ].slice(0, 50)
-      );
-    } else if (event.type === "fall") {
-      setRows((prev) =>
-        [
-          {
-            id: "fall-" + event.ts,
-            ts: event.ts,
-            g: 0,
-            tag: "FALL" as const,
-          },
-          ...prev,
-        ].slice(0, 50)
-      );
-    }
-  }, []);
-
-  const start = async () => {
+  const start = () => {
     if (isRecording) return;
+    setRows([]);
+    setPeakG(1.0);
 
-    // If engine is not running, start it in "test mode"
-    if (!isFallEngineRunning()) {
-      console.log(
-        "[ImpactTestPanel] Engine not running; starting in TEST mode with sensitivity",
-        TEST_SENSITIVITY
-      );
-      await startFallEngine(TEST_SENSITIVITY, { testMode: true });
-      setStartedLocally(true);
+    console.log(
+      "[ImpactTestPanel] starting native fall service with sensitivity",
+      TEST_SENSITIVITY
+    );
+    startFallService(TEST_SENSITIVITY);
 
-      // refresh config after starting
-      const engineCfg = getFallEngineConfig();
-      if (engineCfg) {
-        setCfg({
-          impactG: engineCfg.impactG,
-          stillnessG: engineCfg.stillnessG,
-        });
-      }
-    } else {
-      console.log(
-        "[ImpactTestPanel] Engine already running; subscribing only (REAL mode)"
-      );
-    }
-
-    const unsub = subscribeToFallEngine(handleEvent);
-    subRef.current = unsub;
-    setIsRecording(true);
+    setIsRecording(true); // start listening
   };
 
-  const stop = async () => {
-    if (subRef.current) {
-      subRef.current();
-      subRef.current = null;
-    }
-    setIsRecording(false);
+  const stop = () => {
+    if (!isRecording) return;
 
-    // If we started the engine for test mode, stop it again
-    if (startedLocallyRef.current) {
-      console.log("[ImpactTestPanel] Stopping engine started in TEST mode");
-      await stopFallEngine();
-      setStartedLocally(false);
-    }
+    console.log("[ImpactTestPanel] stopping native fall service");
+    stopFallService(); // stop native engine
+
+    setIsRecording(false); // cleanup happens in useEffect return
   };
 
   const clear = () => {
@@ -233,13 +232,13 @@ export default function ImpactTestPanel({
           }}
         >
           <Text style={styles.hint}>
-            Logging ≥ {MIN_LOG_G.toFixed(1)} g (and all impacts)
+            Logging ≥ {MIN_LOG_G.toFixed(1)} g (and all impacts/falls)
           </Text>
           <Text style={styles.hint}>
-            impactG (engine): {cfg.impactG.toFixed(2)} g
+            impactG (approx): {cfg.impactG.toFixed(2)} g
           </Text>
           <Text style={styles.hint}>
-            stillnessG: {cfg.stillnessG.toFixed(2)} g
+            stillnessG (approx): {cfg.stillnessG.toFixed(2)} g
           </Text>
         </View>
 

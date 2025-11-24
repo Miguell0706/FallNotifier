@@ -9,9 +9,13 @@
     }
   },
   "include": [
+    "core/**/*",
+    "components/**/*",
+    "app/**/*",
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ]
+
 }
