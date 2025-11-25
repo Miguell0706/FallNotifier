@@ -8,6 +8,7 @@ import {
   startFallService,
   stopFallService,
 } from "../core/FallBridge";
+import { sensitivityToImpactG } from "../core/sensitivity";
 
 type ImpactRow = {
   id: string;
@@ -17,26 +18,28 @@ type ImpactRow = {
 };
 
 const MIN_LOG_G = 1.4; // only log meaningful motion
-const TEST_SENSITIVITY = 7; // tweak as needed
 
 export default function ImpactTestPanel({
   styles,
   onBack,
+  sensitivity,
 }: {
   styles: any;
   onBack: () => void;
+  sensitivity: number;
 }) {
   const [isRecording, setIsRecording] = React.useState(false);
   const [currentG, setCurrentG] = React.useState(1.0);
   const [peakG, setPeakG] = React.useState(1.0);
   const [rows, setRows] = React.useState<ImpactRow[]>([]);
-  const [cfg] = React.useState(() => ({
-    impactG: 8, // just display defaults for now
-    stillnessG: 1.05,
-  }));
 
-  // SAMPLE handler
-  // SAMPLE handler
+  // Use real app sensitivity to compute approximate impactG for UI
+  const impactGApprox = React.useMemo(
+    () => sensitivityToImpactG(sensitivity),
+    [sensitivity]
+  );
+  const stillnessGApprox = 1.05;
+
   // SAMPLE handler
   const handleSample = React.useCallback((e: { g: number; ts: number }) => {
     const gRounded = Number(e.g.toFixed(2));
@@ -145,21 +148,24 @@ export default function ImpactTestPanel({
 
     console.log(
       "[ImpactTestPanel] starting native fall service with sensitivity",
-      TEST_SENSITIVITY
+      sensitivity
     );
-    startFallService(TEST_SENSITIVITY);
+    startFallService(sensitivity); // use real sensitivity from props
 
     setIsRecording(true); // start listening
   };
 
-  const stop = () => {
-    if (!isRecording) return;
+  const stop = React.useCallback(() => {
+    console.log("[ImpactTestPanel] stop() pressed");
 
-    console.log("[ImpactTestPanel] stopping native fall service");
-    stopFallService(); // stop native engine
+    try {
+      stopFallService(); // always call Kotlin stop
+    } catch (e) {
+      console.warn("[ImpactTestPanel] stopFallService error", e);
+    }
 
-    setIsRecording(false); // cleanup happens in useEffect return
-  };
+    setIsRecording(false); // always update UI
+  }, []);
 
   const clear = () => {
     setRows([]);
@@ -168,7 +174,13 @@ export default function ImpactTestPanel({
 
   return (
     <View style={styles.panel}>
-      <Pressable onPress={onBack} style={styles.backBtn}>
+      <Pressable
+        onPress={() => {
+          stop(); // 👈 stop engine when leaving
+          onBack();
+        }}
+        style={styles.backBtn}
+      >
         <Text style={styles.backText}>‹ Back</Text>
       </Pressable>
 
@@ -191,7 +203,7 @@ export default function ImpactTestPanel({
           <Text
             style={{
               color:
-                currentG >= cfg.impactG
+                currentG >= impactGApprox
                   ? "#ffb3b3"
                   : currentG >= MIN_LOG_G
                   ? "#FFE6B3"
@@ -217,6 +229,7 @@ export default function ImpactTestPanel({
               {isRecording ? "Stop" : "Start"}
             </Text>
           </Pressable>
+
           <Pressable style={styles.btnGhost} onPress={clear}>
             <Text style={styles.btnGhostLabel}>Clear log</Text>
           </Pressable>
@@ -235,10 +248,10 @@ export default function ImpactTestPanel({
             Logging ≥ {MIN_LOG_G.toFixed(1)} g (and all impacts/falls)
           </Text>
           <Text style={styles.hint}>
-            impactG (approx): {cfg.impactG.toFixed(2)} g
+            impactG (approx): {impactGApprox.toFixed(2)} g
           </Text>
           <Text style={styles.hint}>
-            stillnessG (approx): {cfg.stillnessG.toFixed(2)} g
+            stillnessG (approx): {stillnessGApprox.toFixed(2)} g
           </Text>
         </View>
 

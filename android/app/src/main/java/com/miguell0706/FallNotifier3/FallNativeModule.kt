@@ -5,7 +5,7 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.bridge.WritableMap   // 👈 ADD THIS
+import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
 class FallNativeModule(
@@ -30,7 +30,7 @@ class FallNativeModule(
         FallEngine.start(
             context = reactApplicationContext,
             sensitivity = sensitivity,
-            testMode = true  // 👈 for ImpactTestPanel visualization
+            testMode = false // 👈 normal behavior
         ) { impactG, onFall ->
             FallDetectorCore(
                 onFall = onFall,
@@ -72,4 +72,8 @@ class FallNativeModule(
         unsubscribe = null
         FallEngine.stop()
     }
+
+    // 👇 Required for NativeEventEmitter (no-op implementations)
+    @ReactMethod fun addListener(eventName: String?) {}
+    @ReactMethod fun removeListeners(count: Int) {}
 }

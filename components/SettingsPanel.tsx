@@ -16,7 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { startFallService, stopFallService } from "../background/FallService";
+import { startFallService, stopFallService } from "../core/FallBridge";
 import { useAppEnabled } from "./AppEnabledProvider";
 import ImpactTestPanel from "./ImpactTestPanel";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
@@ -287,8 +287,13 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     if (!enabled) return; // only when guard is ON
 
     const t = setTimeout(() => {
-      // restart background service with new sensitivity
-      stopFallService().then(() => startFallService(sensitivity));
+      // restart native Kotlin engine with new sensitivity
+      try {
+        stopFallService(); // fire-and-forget
+        startFallService(sensitivity);
+      } catch (e) {
+        console.warn("[SettingsPanel] error restarting fall service", e);
+      }
     }, 400); // small delay so it doesn't restart too aggressively
 
     return () => clearTimeout(t);
@@ -655,7 +660,11 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         {screen === "menu" && <Menu />}
         {screen === "message" && <MessageAndCountdown />}
         {screen === "test" && (
-          <ImpactTestPanel styles={styles} onBack={() => setScreen("menu")} />
+          <ImpactTestPanel
+            styles={styles}
+            sensitivity={sensitivity}
+            onBack={() => setScreen("menu")}
+          />
         )}
         {screen === "sensitivity" && <SensitivityPage />}
         {screen === "faq" && <FAQ />}

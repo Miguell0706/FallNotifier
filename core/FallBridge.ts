@@ -6,12 +6,13 @@ export const FALL_SAMPLE = "FallEngineSample";
 export const FALL_IMPACT = "FallEngineImpact";
 export const FALL_FALL = "FallEngineFall";
 
-// Only create an emitter if the native module exists on Android.
-// Otherwise keep it null and guard before using it.
-export const fallEmitter: NativeEventEmitter | null =
+// Always export a non-null emitter.
+// On Android with the native module, it is wired to FallNativeModule.
+// Otherwise it's just a no-op emitter (events won't fire, but addListener is safe).
+export const fallEmitter: NativeEventEmitter =
   Platform.OS === "android" && FallNativeModule
     ? new NativeEventEmitter(FallNativeModule)
-    : null;
+    : new NativeEventEmitter();
 
 // Warning if missing in DEV
 if (!FallNativeModule && __DEV__) {

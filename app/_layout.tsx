@@ -4,14 +4,12 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
-import BackgroundService from "react-native-background-actions";
 import "react-native-reanimated";
-import { startFallService, stopFallService } from "../background/FallService";
 import {
   AppEnabledProvider,
   useAppEnabled,
 } from "../components/AppEnabledProvider";
-
+import { startFallService, stopFallService } from "../core/FallBridge";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -38,21 +36,20 @@ function AppShell() {
   }, []);
 
   // Start/stop Android foreground service when toggle changes
+  // Start/stop Android foreground service when toggle changes
   useEffect(() => {
     if (!hydrated || Platform.OS !== "android") return;
 
     (async () => {
-      // stop the service if the user disabled your toggle
       if (!enabled) {
-        const running = await BackgroundService.isRunning();
-        if (running) await stopFallService();
+        stopFallService(); // Just tell Kotlin to stop
         return;
       }
 
-      // Create a channel and request permission BEFORE starting the service
+      // 1) Request notification permission (so Kotlin has a channel)
       try {
         await Notifications.setNotificationChannelAsync("default", {
-          name: "Default",
+          name: "Fall Notifier",
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 250, 250, 250],
           lightColor: "#FF231F7C",
@@ -63,23 +60,20 @@ function AppShell() {
         () => ({ status: "denied" as const })
       );
       if (status !== "granted") {
-        console.warn(
-          "[fall] Notifications permission not granted; not starting service."
-        );
-        return; // Avoid starting a foreground service without a notif (can crash on Android 13+)
+        console.warn("[fall] Permission not granted, not starting service.");
+        return;
       }
 
-      // Now it's safe to start
-      const running = await BackgroundService.isRunning();
-      if (!running) {
-        try {
-          await startFallService();
-        } catch (e) {
-          console.error("[fall] startFallService failed:", e);
-        }
+      // 2) Just start the native detector (Kotlin handles everything)
+      try {
+        // IMPORTANT: you now must pass sensitivity!
+        startFallService(5); // temporary default until we pass UI value
+      } catch (e) {
+        console.error("[fall] startFallService failed:", e);
       }
     })();
   }, [enabled, hydrated]);
+
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync().catch(() => {});
   }, [hydrated]);

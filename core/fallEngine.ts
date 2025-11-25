@@ -1,7 +1,12 @@
 // core/fallEngine.ts
-import { Accelerometer } from "expo-sensors";
-import { createFallDetector } from "./fallDetectorCore";
-import { sensitivityToImpactG } from "./sensitivity";
+import {
+  FALL_FALL,
+  FALL_IMPACT,
+  FALL_SAMPLE,
+  fallEmitter,
+  startFallService as startNativeFallService,
+  stopFallService as stopNativeFallService,
+} from "./FallBridge";
 
 export type FallEngineEvent =
   | { type: "sample"; g: number; ts: number }
@@ -10,84 +15,109 @@ export type FallEngineEvent =
 
 export type FallEngineListener = (event: FallEngineEvent) => void;
 
-let detector: ReturnType<typeof createFallDetector> | null = null;
-let accelSub: { remove: () => void } | null = null;
 const listeners = new Set<FallEngineListener>();
-
 let running = false;
-let config: { impactG: number; stillnessG: number; rateMs: number } | null = null;
 
-// 👇 NEW: flag for sandbox/test mode
-let testMode = false;
+// hold native emitter subscriptions so we can clean them up
+let subs: { remove: () => void }[] = [];
 
-/** 
- * Start fall engine.
- * @param sensitivity User sensitivity (1–10)
- * @param opts Optional { testMode?: boolean }
+/**
+ * Start the Kotlin-backed fall engine.
+ * - Tells native to start the engine with the given sensitivity
+ * - Subscribes to native SAMPLE / IMPACT / FALL events
+ * - Forwards them to JS listeners as FallEngineEvent objects
  */
-export async function startFallEngine(sensitivity: number, opts?: { testMode?: boolean }) {
-  if (running) return;
-  running = true;
-  testMode = !!opts?.testMode; // 👈 remember if test mode
+export async function startFallEngine(sensitivity: number) {
+  // if already running, restart with new sensitivity
+  if (running) {
+    await stopNativeFallService();
+    cleanupSubs();
+  }
 
-  const impactG = sensitivityToImpactG(sensitivity);
   console.log(
-    "[fallEngine] start with sensitivity =", sensitivity,
-    "impactG =", impactG,
-    "testMode =", testMode
+    "[fallEngine] start (Kotlin-backed) with sensitivity =",
+    sensitivity
   );
 
-  detector = createFallDetector(
-    async () => {
-      const ts = Date.now();
-      console.log("[fallEngine] FALL event at", ts);
-      // 👇 Only notify if not in test mode
-      if (!testMode) {
-        for (const l of listeners) {
-          l({ type: "fall", ts });
-        }
-      }
-    },
-    { thresholds: { impactG }, debug: false }
-  );
+  running = true;
 
-  config = detector.getConfig();
-  await Accelerometer.setUpdateInterval(config.rateMs);
+  // Start native service / engine
+  await startNativeFallService(sensitivity);
 
-  accelSub = Accelerometer.addListener(({ x, y, z }) => {
-    const g = Math.sqrt(x * x + y * y + z * z);
-    const ts = Date.now();
-    const det = detector;
-    if (!det) return;
+  // Wire native events → FallEngineEvent for JS listeners
+  cleanupSubs();
 
-    det.onSample(g);
+  subs.push(
+    fallEmitter.addListener(FALL_SAMPLE, (e: any) => {
+      const g = Number(e.g);
+      const ts = typeof e.ts === "number" ? e.ts : Date.now();
 
-    // Always broadcast raw sample (safe for UI test panels)
-    for (const l of listeners) {
-      l({ type: "sample", g, ts });
-    }
-
-    // Broadcast impact only to listeners (still fine for UI)
-    if (config && g >= config.impactG) {
+      // broadcast to JS listeners
       for (const l of listeners) {
-        l({ type: "impact", g, ts, impactG: config.impactG });
+        l({ type: "sample", g, ts });
       }
-    }
+    })
+  );
+
+  subs.push(
+    fallEmitter.addListener(FALL_IMPACT, (e: any) => {
+      const g = Number(e.g);
+      const ts = typeof e.ts === "number" ? e.ts : Date.now();
+      const impactG =
+        typeof e.impactG === "number" ? Number(e.impactG) : g;
+
+      for (const l of listeners) {
+        l({ type: "impact", g, ts, impactG });
+      }
+    })
+  );
+
+  subs.push(
+    fallEmitter.addListener(FALL_FALL, (e: any) => {
+      const ts = typeof e.ts === "number" ? e.ts : Date.now();
+
+      console.log("[fallEngine] FALL event (from Kotlin) at", ts);
+
+      for (const l of listeners) {
+        l({ type: "fall", ts });
+      }
+    })
+  );
+}
+
+function cleanupSubs() {
+  subs.forEach((s) => {
+    try {
+      s.remove();
+    } catch {}
   });
+  subs = [];
 }
 
+/**
+ * Stop the Kotlin-backed fall engine.
+ */
 export async function stopFallEngine() {
-  console.log("[fallEngine] stop");
-  try {
-    accelSub?.remove?.();
-  } catch {}
-  accelSub = null;
-  detector = null;
-  config = null;
+  if (!running) {
+    return;
+  }
+
+  console.log("[fallEngine] stop (Kotlin-backed)");
+
+  cleanupSubs();
   running = false;
-  testMode = false; // 👈 reset
+
+  try {
+    await stopNativeFallService();
+  } catch (e) {
+    console.warn("[fallEngine] error stopping native fall service", e);
+  }
 }
 
+/**
+ * JS subscription API stays the same so background/FallService.ts
+ * continues to work unchanged.
+ */
 export function subscribeToFallEngine(listener: FallEngineListener) {
   listeners.add(listener);
   return () => {
@@ -95,8 +125,13 @@ export function subscribeToFallEngine(listener: FallEngineListener) {
   };
 }
 
+/**
+ * Optional helpers (stubs) – keep them if anything imports them.
+ */
 export function getFallEngineConfig() {
-  return config;
+  // Config now lives on the Kotlin side. You can extend the bridge later
+  // to return thresholds if you want. For now just return null.
+  return null;
 }
 
 export function isFallEngineRunning() {
