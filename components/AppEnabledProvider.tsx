@@ -49,7 +49,7 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // side-effect: start/stop native service
         if (next && !prev) {
-          startFallService(currentSensitivity);
+          startFallService(currentSensitivity, true);
         } else if (!next && prev) {
           stopFallService();
         }

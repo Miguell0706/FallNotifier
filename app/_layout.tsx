@@ -4,6 +4,8 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
+import { isTestPanelActive } from "../core/TestPanelGuard";
+
 import "react-native-reanimated";
 import {
   AppEnabledProvider,
@@ -41,11 +43,10 @@ function AppShell() {
     if (!hydrated || Platform.OS !== "android") return;
 
     (async () => {
-      if (!enabled) {
-        stopFallService(); // Just tell Kotlin to stop
+      if (!enabled || isTestPanelActive()) {
+        stopFallService(); // don't run if disabled OR test panel active
         return;
       }
-
       // 1) Request notification permission (so Kotlin has a channel)
       try {
         await Notifications.setNotificationChannelAsync("default", {
@@ -65,9 +66,10 @@ function AppShell() {
       }
 
       // 2) Just start the native detector (Kotlin handles everything)
+      // 2) Just start the native detector (Kotlin handles everything)
       try {
-        // IMPORTANT: you now must pass sensitivity!
-        startFallService(5); // temporary default until we pass UI value
+        // 🚨 REAL MODE: testMode = false here → real falls go through your Kotlin alert path
+        startFallService(5, false); // 5 = temporary default sensitivity
       } catch (e) {
         console.error("[fall] startFallService failed:", e);
       }

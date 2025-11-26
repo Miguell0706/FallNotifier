@@ -1,3 +1,4 @@
+// core/FallBridge.ts
 import { NativeEventEmitter, NativeModules, Platform } from "react-native";
 
 const { FallNativeModule } = NativeModules;
@@ -6,13 +7,11 @@ export const FALL_SAMPLE = "FallEngineSample";
 export const FALL_IMPACT = "FallEngineImpact";
 export const FALL_FALL = "FallEngineFall";
 
-// Always export a non-null emitter.
-// On Android with the native module, it is wired to FallNativeModule.
-// Otherwise it's just a no-op emitter (events won't fire, but addListener is safe).
-export const fallEmitter: NativeEventEmitter =
+// Emitter: MUST be null if native module is missing
+export const fallEmitter: NativeEventEmitter | null =
   Platform.OS === "android" && FallNativeModule
     ? new NativeEventEmitter(FallNativeModule)
-    : new NativeEventEmitter();
+    : null;
 
 // Warning if missing in DEV
 if (!FallNativeModule && __DEV__) {
@@ -21,8 +20,8 @@ if (!FallNativeModule && __DEV__) {
   );
 }
 
-export function startFallService(sensitivity: number) {
-  return FallNativeModule?.startFallService?.(sensitivity);
+export function startFallService(sensitivity: number, testMode = false) {
+  return FallNativeModule?.startFallService?.(sensitivity, testMode);
 }
 
 export function stopFallService() {

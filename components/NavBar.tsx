@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -9,6 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  isTestPanelActive,
+  subscribeTestPanelActive,
+} from "../core/TestPanelGuard"; // 👈 NEW
 import { useAppEnabled } from "./AppEnabledProvider";
 
 const { width, height } = Dimensions.get("window");
@@ -22,6 +26,15 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
   const [isRotated, setIsRotated] = useState(false);
   const { enabled, setEnabled, hydrated } = useAppEnabled();
 
+  // 👇 local reactive copy of test-panel active state
+  const [testPanelActive, setTestPanelActiveState] = useState(
+    isTestPanelActive()
+  );
+
+  useEffect(() => {
+    const unsubscribe = subscribeTestPanelActive(setTestPanelActiveState);
+    return unsubscribe;
+  }, []);
   const handleSettingsPress = () => {
     Animated.timing(rotateValue, {
       toValue: isRotated ? 0 : 1,
@@ -36,11 +49,24 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
     inputRange: [0, 1],
     outputRange: ["0deg", "160deg"],
   });
+
   const handleToggle = (next: boolean) => {
     if (!hydrated) return;
+
+    if (isTestPanelActive()) {
+      // either just block:
+      // or force OFF if you prefer:
+      enabled && setEnabled(false);
+      return;
+
+      // setEnabled(false);
+      // return;
+    }
+
     console.log("handleToggle", next);
     setEnabled(next);
   };
+
   return (
     <View style={styles.nav}>
       <View style={styles.titleContainer}>
@@ -56,7 +82,6 @@ const NavBar: React.FC<NavBarProps> = ({ onSettingsPress }) => {
           <Switch
             value={enabled}
             onValueChange={handleToggle}
-            disabled={!hydrated}
             accessibilityLabel={enabled ? "Disable alerts" : "Enable alerts"}
           />
         </View>
@@ -94,8 +119,16 @@ const styles = StyleSheet.create({
   },
   logo: { width: width * 0.08, height: height * 0.04, resizeMode: "contain" },
   rightControls: { flexDirection: "row", alignItems: "center", gap: 14 },
-  switchBlock: { flexDirection: "row", alignItems: "center", gap: 6 },
+  switchBlock: {
+    flexDirection: "column", // 👈 so the hint can sit under the switch
+    alignItems: "center",
+    gap: 4,
+  },
   switchLabel: { fontSize: width * 0.04, color: "black" },
+  switchHint: {
+    fontSize: width * 0.028,
+    color: "rgba(0,0,0,0.6)",
+  },
   image: {
     paddingTop: height * 0.02,
     width: width * 0.08,

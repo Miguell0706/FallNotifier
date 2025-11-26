@@ -24,18 +24,24 @@ class FallNativeModule(
     }
 
     @ReactMethod
-    fun startFallService(sensitivity: Int) {
-        Log.i("FallNativeModule", "startFallService called with sensitivity=$sensitivity")
+    fun startFallService(sensitivity: Int?, testMode: Boolean?) {
+        val s = sensitivity ?: 5            // fallback if JS somehow sends null
+        val safeTest = testMode ?: false    // default: real mode
+
+        Log.i(
+            "FallNativeModule",
+            "startFallService called with sensitivity=$s testMode=$safeTest"
+        )
 
         FallEngine.start(
             context = reactApplicationContext,
-            sensitivity = sensitivity,
-            testMode = false // 👈 normal behavior
+            sensitivity = s,
+            testMode = safeTest
         ) { impactG, onFall ->
             FallDetectorCore(
                 onFall = onFall,
                 thresholds = FallThresholds(impactG = impactG),
-                debug = true
+                debug = safeTest
             )
         }
 
@@ -73,7 +79,15 @@ class FallNativeModule(
         FallEngine.stop()
     }
 
-    // 👇 Required for NativeEventEmitter (no-op implementations)
-    @ReactMethod fun addListener(eventName: String?) {}
-    @ReactMethod fun removeListeners(count: Int) {}
+    // 👇 These two are required so React Native's NativeEventEmitter
+    // stops warning about addListener/removeListeners
+    @ReactMethod
+    fun addListener(eventName: String) {
+        // no-op, required by RN event emitter
+    }
+
+    @ReactMethod
+    fun removeListeners(count: Int) {
+        // no-op
+    }
 }

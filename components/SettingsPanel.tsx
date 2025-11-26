@@ -1,7 +1,6 @@
 // components/SettingsPanel.tsx
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
-import * as Clipboard from "expo-clipboard";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -16,8 +15,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { startFallService, stopFallService } from "../core/FallBridge";
 import { useAppEnabled } from "./AppEnabledProvider";
+
 import ImpactTestPanel from "./ImpactTestPanel";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
@@ -278,27 +277,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     })();
   }, []);
 
-  // Whenever sensitivity changes, persist it
-  React.useEffect(() => {
-    if (!hydrated) return;
-    AsyncStorage.setItem(SENSITIVITY_KEY, String(sensitivity)).catch(() => {});
-  }, [sensitivity, hydrated]);
-  React.useEffect(() => {
-    if (!enabled) return; // only when guard is ON
-
-    const t = setTimeout(() => {
-      // restart native Kotlin engine with new sensitivity
-      try {
-        stopFallService(); // fire-and-forget
-        startFallService(sensitivity);
-      } catch (e) {
-        console.warn("[SettingsPanel] error restarting fall service", e);
-      }
-    }, 400); // small delay so it doesn't restart too aggressively
-
-    return () => clearTimeout(t);
-  }, [enabled, sensitivity]);
-
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",
@@ -328,6 +306,7 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
       </View>
     );
   }
+
   async function openLink(url: string) {
     try {
       const result = await WebBrowser.openBrowserAsync(url, {
@@ -347,19 +326,6 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
         Alert.alert("Unable to open link", "Please try again later.");
       }
     }
-  }
-
-  async function copyToClipboard(text: string, label?: string) {
-    await Clipboard.setStringAsync(text);
-    Alert.alert("Copied", `${label ?? "Value"} copied to clipboard.`);
-  }
-  function Q({ q, children }: { q: string; children: React.ReactNode }) {
-    return (
-      <View style={{ marginBottom: 12 }}>
-        <Text style={styles.q}>{q}</Text>
-        <Text style={styles.a}>{children}</Text>
-      </View>
-    );
   }
 
   function Back({ onPress }: { onPress: () => void }) {

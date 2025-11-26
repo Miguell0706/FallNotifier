@@ -9,6 +9,8 @@ import {
   stopFallService,
 } from "../core/FallBridge";
 import { sensitivityToImpactG } from "../core/sensitivity";
+import { setTestPanelActive } from "../core/TestPanelGuard";
+import { useAppEnabled } from "./AppEnabledProvider"; // 👈 NEW
 
 type ImpactRow = {
   id: string;
@@ -33,6 +35,10 @@ export default function ImpactTestPanel({
   const [peakG, setPeakG] = React.useState(1.0);
   const [rows, setRows] = React.useState<ImpactRow[]>([]);
 
+  // 👇 read global guard toggle
+  const { enabled } = useAppEnabled();
+  const canTest = !enabled; // only allow testing when guard is OFF
+
   // Use real app sensitivity to compute approximate impactG for UI
   const impactGApprox = React.useMemo(
     () => sensitivityToImpactG(sensitivity),
@@ -46,7 +52,6 @@ export default function ImpactTestPanel({
     setCurrentG(gRounded);
     setPeakG((prev) => (gRounded > prev ? gRounded : prev));
 
-    // Only log & store when it's above our min G
     if (gRounded >= MIN_LOG_G) {
       console.log("[ImpactTestPanel] SAMPLE event (logged)", e);
 
@@ -104,6 +109,10 @@ export default function ImpactTestPanel({
       ].slice(0, 50);
     });
   }, []);
+  // Inform global guard about test panel active state
+  React.useEffect(() => {
+    setTestPanelActive(true);
+  }, []);
 
   // Subscribe/unsubscribe based on isRecording
   React.useEffect(() => {
@@ -143,6 +152,15 @@ export default function ImpactTestPanel({
 
   const start = () => {
     if (isRecording) return;
+
+    // Block starting test while real monitoring is ON
+    if (enabled) {
+      console.log(
+        "[ImpactTestPanel] start blocked: main guard is enabled (real monitoring)"
+      );
+      return;
+    }
+
     setRows([]);
     setPeakG(1.0);
 
@@ -150,11 +168,13 @@ export default function ImpactTestPanel({
       "[ImpactTestPanel] starting native fall service with sensitivity",
       sensitivity
     );
-    startFallService(sensitivity); // use real sensitivity from props
+
+    // TEST MODE: true → no real alerts, just visualization
+    startFallService(sensitivity, true);
 
     setIsRecording(true); // start listening
+    setTestPanelActive(true); // lock the toggle in the navbar
   };
-
   const stop = React.useCallback(() => {
     console.log("[ImpactTestPanel] stop() pressed");
 
@@ -176,7 +196,8 @@ export default function ImpactTestPanel({
     <View style={styles.panel}>
       <Pressable
         onPress={() => {
-          stop(); // 👈 stop engine when leaving
+          stop(); // stop engine when leaving
+          setTestPanelActive(false); // 👈 unlock the toggle immediately
           onBack();
         }}
         style={styles.backBtn}
@@ -222,7 +243,11 @@ export default function ImpactTestPanel({
         {/* Controls */}
         <View style={{ flexDirection: "row", gap: 10 }}>
           <Pressable
-            style={styles.btnPrimary}
+            style={[
+              styles.btnPrimary,
+              !canTest && { opacity: 0.5 }, // dim when disabled
+            ]}
+            disabled={!canTest}
             onPress={isRecording ? stop : start}
           >
             <Text style={styles.btnPrimaryLabel}>
@@ -234,6 +259,13 @@ export default function ImpactTestPanel({
             <Text style={styles.btnGhostLabel}>Clear log</Text>
           </Pressable>
         </View>
+
+        {/* Little hint about the guard */}
+        {enabled && (
+          <Text style={[styles.hint, { color: "#ffb3b3" }]}>
+            Monitoring is ON. Turn it off to run test mode.
+          </Text>
+        )}
 
         {/* Info */}
         <View

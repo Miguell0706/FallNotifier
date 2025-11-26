@@ -26,8 +26,11 @@ let subs: { remove: () => void }[] = [];
  * - Tells native to start the engine with the given sensitivity
  * - Subscribes to native SAMPLE / IMPACT / FALL events
  * - Forwards them to JS listeners as FallEngineEvent objects
+ *
+ * NOTE: This is now primarily for any JS code that wants to subscribe
+ *       to the Kotlin fall events; the main app uses FallBridge directly.
  */
-export async function startFallEngine(sensitivity: number) {
+export async function startFallEngine(sensitivity: number, testMode = true) {
   // if already running, restart with new sensitivity
   if (running) {
     await stopNativeFallService();
@@ -36,13 +39,22 @@ export async function startFallEngine(sensitivity: number) {
 
   console.log(
     "[fallEngine] start (Kotlin-backed) with sensitivity =",
-    sensitivity
+    sensitivity,
+    "testMode =",
+    testMode
   );
+
+  // If we don't have a native emitter (iOS, or native not loaded), bail out
+  if (!fallEmitter) {
+    console.warn("[fallEngine] fallEmitter is null – no native events available");
+    running = false;
+    return;
+  }
 
   running = true;
 
-  // Start native service / engine
-  await startNativeFallService(sensitivity);
+  // Start native service / engine (Kotlin)
+  await startNativeFallService(sensitivity, testMode);
 
   // Wire native events → FallEngineEvent for JS listeners
   cleanupSubs();
@@ -115,8 +127,9 @@ export async function stopFallEngine() {
 }
 
 /**
- * JS subscription API stays the same so background/FallService.ts
- * continues to work unchanged.
+ * JS subscription API.
+ * Right now your main app isn't using this, but it's here if
+ * you want other JS modules to react to fall events.
  */
 export function subscribeToFallEngine(listener: FallEngineListener) {
   listeners.add(listener);
@@ -129,8 +142,7 @@ export function subscribeToFallEngine(listener: FallEngineListener) {
  * Optional helpers (stubs) – keep them if anything imports them.
  */
 export function getFallEngineConfig() {
-  // Config now lives on the Kotlin side. You can extend the bridge later
-  // to return thresholds if you want. For now just return null.
+  // Config now lives on the Kotlin side.
   return null;
 }
 
