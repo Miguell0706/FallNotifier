@@ -12,7 +12,7 @@ import { startFallService, stopFallService } from "../core/FallBridge";
 // ⬇️ if you already have a settings context, pull sensitivity from it
 // import { useSettings } from "../settings/SettingsContext";
 
-const STORAGE_KEY = "appEnabled:v1";
+const STORAGE_KEY = "appEnabled:v2";
 
 type Setter = boolean | ((prev: boolean) => boolean);
 
@@ -28,7 +28,7 @@ const AppEnabledContext = createContext<Ctx | undefined>(undefined);
 export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [enabled, setEnabledState] = useState<boolean>(true);
+  const [enabled, setEnabledState] = useState<boolean>(false);
   const [hydrated, setHydrated] = useState(false);
 
   // TODO: wire real sensitivity from your settings context
@@ -49,7 +49,7 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
 
         // side-effect: start/stop native service
         if (next && !prev) {
-          startFallService(currentSensitivity, true);
+          startFallService(currentSensitivity, false);
         } else if (!next && prev) {
           stopFallService();
         }
@@ -73,8 +73,8 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
         } else if (raw === "0") {
           setEnabled(false); // will call stopFallService()
         } else {
-          // first run: leave default state (true) but don't auto-start service
-          setEnabledState(true);
+          // first run: default OFF and don't start service
+          setEnabledState(false);
         }
       } finally {
         if (mounted) setHydrated(true);

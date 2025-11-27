@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.util.Log
 import kotlin.math.sqrt
 
 // --- Event types, like your TS FallEngineEvent union ---
@@ -16,6 +17,8 @@ sealed class FallEngineEvent {
 }
 
 typealias FallEngineListener = (FallEngineEvent) -> Unit
+
+private const val TAG = "FallEngine"
 
 /**
  * Kotlin twin of core/fallEngine.ts.
@@ -38,47 +41,55 @@ object FallEngine : SensorEventListener {
 
     // --- public API, like startFallEngine in TS ---
 
-    /**
-     * Start fall engine.
-     * @param context any Context (Service, Activity, Application)
-     * @param sensitivity 1..10
-     * @param testMode if true, FALL events are NOT emitted
-     * @param detectorFactory function to create the detector from impactG + onFall callback
-     */
     fun start(
         context: Context,
         sensitivity: Int,
         testMode: Boolean = false,
         detectorFactory: (impactG: Float, onFall: () -> Unit) -> FallDetector
     ) {
-        if (running) return
+        if (running) {
+            Log.w(TAG, "start() called but already running; ignoring (sensitivity=$sensitivity)")
+            return
+        }
         running = true
         this.testMode = testMode
 
         val impactG = Sensitivity.toImpactG(sensitivity)
-        android.util.Log.i(
-            "FallEngine",
-            "start with sensitivity=$sensitivity impactG=$impactG testMode=$testMode"
+
+        Log.i(
+            TAG,
+            "start() sensitivity=$sensitivity impactG=$impactG testMode=$testMode"
         )
 
         detector = detectorFactory(impactG) {
             val ts = System.currentTimeMillis()
-            android.util.Log.i("FallEngine", "FALL event at $ts")
+            Log.i(TAG, "onFall() from detector at ts=$ts testMode=$testMode")
 
             if (!this.testMode) {
                 for (l in listeners) {
                     l(FallEngineEvent.Fall(ts))
                 }
+            } else {
+                Log.d(TAG, "testMode=true → FALL event not forwarded to JS")
             }
         }
 
         config = detector?.getConfig()
+        Log.i(TAG, "config from detector: $config")
 
         sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
+        if (accelSensor == null) {
+            Log.e(TAG, "No accelerometer sensor found; stopping")
+            stop()
+            return
+        }
+
         val rateMs = config?.rateMs ?: 50
-        val rateUs = rateMs * 1000  // SensorManager expects microseconds
+        val rateUs = rateMs * 1000
+
+        Log.i(TAG, "Registering sensor listener with rateMs=$rateMs (rateUs=$rateUs)")
 
         sensorManager?.registerListener(
             this,
@@ -88,10 +99,12 @@ object FallEngine : SensorEventListener {
     }
 
     fun stop() {
-        android.util.Log.i("FallEngine", "stop")
+        Log.i(TAG, "stop() called (running=$running)")
         try {
             sensorManager?.unregisterListener(this)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "unregisterListener error: ${e.message}")
+        }
 
         detector = null
         config = null
@@ -107,7 +120,11 @@ object FallEngine : SensorEventListener {
 
     fun subscribe(listener: FallEngineListener): () -> Unit {
         listeners.add(listener)
-        return { listeners.remove(listener) }
+        Log.d(TAG, "subscribe() listenerCount=${listeners.size}")
+        return {
+            listeners.remove(listener)
+            Log.d(TAG, "unsubscribe() listenerCount=${listeners.size}")
+        }
     }
 
     // --- SensorEventListener implementation ---
@@ -116,7 +133,6 @@ object FallEngine : SensorEventListener {
         if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
         val det = detector ?: return
 
-        // Android values are in m/s^2 → convert to g for detector
         val ax = event.values[0]
         val ay = event.values[1]
         val az = event.values[2]
@@ -126,15 +142,24 @@ object FallEngine : SensorEventListener {
         val g = mps2 / 9.80665f
         val ts = System.currentTimeMillis()
 
+        // Feed into detector
         det.onSample(g)
 
-        // raw sample
+        // In testMode, show more detail so your ImpactTestPanel makes sense
+       // Only log "bigger" samples in test mode
+        if (testMode && g >= 2.0f) {
+            Log.d(TAG, "sample g=$g ts=$ts")
+        }
+
+
+        // raw sample → JS
         for (l in listeners) {
             l(FallEngineEvent.Sample(g, ts))
         }
 
         val cfg = config
         if (cfg != null && g >= cfg.impactG) {
+            Log.i(TAG, "IMPACT threshold crossed: g=$g >= impactG=${cfg.impactG} ts=$ts")
             for (l in listeners) {
                 l(FallEngineEvent.Impact(g, ts, cfg.impactG))
             }

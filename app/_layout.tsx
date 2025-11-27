@@ -4,14 +4,12 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
-import { isTestPanelActive } from "../core/TestPanelGuard";
 
 import "react-native-reanimated";
 import {
   AppEnabledProvider,
   useAppEnabled,
 } from "../components/AppEnabledProvider";
-import { startFallService, stopFallService } from "../core/FallBridge";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -39,42 +37,6 @@ function AppShell() {
 
   // Start/stop Android foreground service when toggle changes
   // Start/stop Android foreground service when toggle changes
-  useEffect(() => {
-    if (!hydrated || Platform.OS !== "android") return;
-
-    (async () => {
-      if (!enabled || isTestPanelActive()) {
-        stopFallService(); // don't run if disabled OR test panel active
-        return;
-      }
-      // 1) Request notification permission (so Kotlin has a channel)
-      try {
-        await Notifications.setNotificationChannelAsync("default", {
-          name: "Fall Notifier",
-          importance: Notifications.AndroidImportance.HIGH,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#FF231F7C",
-        });
-      } catch {}
-
-      const { status } = await Notifications.requestPermissionsAsync().catch(
-        () => ({ status: "denied" as const })
-      );
-      if (status !== "granted") {
-        console.warn("[fall] Permission not granted, not starting service.");
-        return;
-      }
-
-      // 2) Just start the native detector (Kotlin handles everything)
-      // 2) Just start the native detector (Kotlin handles everything)
-      try {
-        // 🚨 REAL MODE: testMode = false here → real falls go through your Kotlin alert path
-        startFallService(5, false); // 5 = temporary default sensitivity
-      } catch (e) {
-        console.error("[fall] startFallService failed:", e);
-      }
-    })();
-  }, [enabled, hydrated]);
 
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync().catch(() => {});

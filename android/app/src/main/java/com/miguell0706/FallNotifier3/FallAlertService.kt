@@ -20,7 +20,8 @@ class FallAlertService : Service() {
 
   // ---- Constants used across the service ----
   companion object {
-    
+    private const val TAG = "FallAlertService"   // 👈 add this
+
     private const val NOTIF_ID = 42                  // Unique ID for the ongoing notification
     private const val REQUEST_FULLSCREEN = 1001      // Request code for fullscreen PendingIntent
 
@@ -40,81 +41,113 @@ class FallAlertService : Service() {
   private var running = false                     // Flag to track if countdown is active
 
   // Called whenever the service receives a command (Intent)
-  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-  // 1) Channel must exist before any notify/foreground call
+ override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
   Notif.ensureChannel(this)
 
-  // 2) Build fullscreen PI once (used for both first start and restarts)
+  val action = intent?.action
+  Log.i(TAG, "onStartCommand action=$action startId=$startId")
+
   val fsIntent = Intent(this, CountdownActivity::class.java)
     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
   val fsPending = PendingIntent.getActivity(
     this, REQUEST_FULLSCREEN, fsIntent,
     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
   )
 
-  when (intent?.action) {
+  when (action) {
     ACTION_SEND_NOW -> {
+      Log.i(TAG, "ACTION_SEND_NOW received → sending immediately")
       sendNow()
       stopSelfCleanly()
       return START_NOT_STICKY
     }
     ACTION_CANCEL -> {
+      Log.i(TAG, "ACTION_CANCEL received → stopping service")
       stopSelfCleanly()
       return START_NOT_STICKY
     }
     ACTION_START -> {
-      // FIRST start path: promote to foreground immediately (required on API 26+)
+      val secs = intent.getIntExtra(EXTRA_SECONDS, 10)
+      Log.i(TAG, "ACTION_START received → seconds=$secs")
+
       val notif = buildNotification(remaining = null, fsPending = fsPending)
       startForeground(NOTIF_ID, notif)
 
-      // (Optional) if the phone is locked, try to bring the UI up
       try {
         val km = getSystemService(KeyguardManager::class.java)
-        if (km?.isKeyguardLocked == true) startActivity(fsIntent)
-      } catch (_: Throwable) {}
+        Log.d(TAG, "Keyguard locked? ${km?.isKeyguardLocked}")
+        if (km?.isKeyguardLocked == true) {
+          Log.i(TAG, "Launching CountdownActivity over lockscreen")
+          startActivity(fsIntent)
+        }
+      } catch (t: Throwable) {
+        Log.w(TAG, "Error starting fullscreen activity: ${t.message}")
+      }
 
-      // Kick off countdown
-      val secs = intent.getIntExtra(EXTRA_SECONDS, 10)
       resetCountdown(secs)
       return START_STICKY
     }
   }
 
-  // Null-intent restart (system restarted sticky service) OR started with no action:
+  Log.w(TAG, "onStartCommand with null/unknown action, restarting foreground countdown")
   val notif = buildNotification(remaining = null, fsPending = fsPending)
-  startForeground(NOTIF_ID, notif) // ensure we're in foreground again
-  if (!running) resetCountdown(10) // optional: restart countdown if not already running
+  startForeground(NOTIF_ID, notif)
+  if (!running) resetCountdown(10)
   return START_STICKY
 }
+
   // Restart countdown with new value
-  private fun resetCountdown(newSeconds: Int = 10) {
-    handler.removeCallbacks(ticker) // Cancel old runnable
-    seconds = newSeconds            // Reset seconds
-    running = true
-    handler.post(ticker)            // Start ticker runnable
+private fun resetCountdown(newSeconds: Int = 10) {
+  Log.i(TAG, "resetCountdown newSeconds=$newSeconds (was $seconds)")
+  handler.removeCallbacks(ticker)
+  seconds = newSeconds
+  running = true
+  handler.post(ticker)
+}
+
+private fun sendNow() {
+  Log.i(TAG, "sendNow() called → TODO: implement SMS sending")
+  // later: log which contacts, template, etc.
+}
+
+private fun stopSelfCleanly() {
+  Log.i(TAG, "stopSelfCleanly() called, stopping service + foreground")
+  sendBroadcast(Intent(ACTION_TICK).putExtra("done", true))
+  running = false
+  handler.removeCallbacks(ticker)
+
+  if (Build.VERSION.SDK_INT >= 24) {
+    stopForeground(STOP_FOREGROUND_REMOVE)
+  } else {
+    @Suppress("DEPRECATION")
+    stopForeground(true)
   }
+  stopSelf()
+}
+
 
   // Runnable that fires every second
   private val ticker = object : Runnable {
-    override fun run() {
-      Log.d("FallAlertService", "tick seconds=$seconds")
+  override fun run() {
+    Log.d(TAG, "tick seconds=$seconds running=$running")
 
-      // Broadcast tick update (UI can listen)
-      sendBroadcast(Intent(ACTION_TICK).putExtra("seconds", seconds))
+    sendBroadcast(Intent(ACTION_TICK).putExtra("seconds", seconds))
 
-      // Update notification text
-      val nm = getSystemService(NotificationManager::class.java)
-      nm.notify(NOTIF_ID, buildNotification(remaining = seconds, fsPending = null))
+    val nm = getSystemService(NotificationManager::class.java)
+    nm.notify(NOTIF_ID, buildNotification(remaining = seconds, fsPending = null))
 
-      if (seconds <= 0) {
-        sendNow()           // Send alert when countdown hits 0
-        stopSelfCleanly()   // Stop service
-      } else {
-        seconds--           // Decrease timer
-        handler.postDelayed(this, 1000) // Call again in 1 second
-      }
+    if (seconds <= 0) {
+      Log.i(TAG, "Countdown finished → triggering sendNow()")
+      sendNow()
+      stopSelfCleanly()
+    } else {
+      seconds--
+      handler.postDelayed(this, 1000)
     }
   }
+}
+
 
   // Build notification with optional countdown + fullscreen intent
   private fun buildNotification(remaining: Int?, fsPending: PendingIntent?): Notification {
@@ -164,23 +197,6 @@ class FallAlertService : Service() {
       .build()
   }
 
-  // Placeholder: actually send SMS here
-  private fun sendNow() {
-  }
-
-  // Cleanly stop service
-  private fun stopSelfCleanly() {
-    sendBroadcast(Intent(ACTION_TICK).putExtra("done", true))
-    running = false
-    handler.removeCallbacks(ticker)
-    if (Build.VERSION.SDK_INT >= 24) {
-      stopForeground(STOP_FOREGROUND_REMOVE)
-    } else {
-      @Suppress("DEPRECATION")
-      stopForeground(true)
-    }
-    stopSelf()
-  }
 
   // Not a bound service
   override fun onBind(intent: Intent?): IBinder? = null

@@ -8,6 +8,18 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
+private const val TAG = "FallNativeModule"
+
+// Optional: mirror JS formula for comparison in logs
+private fun previewImpactG(s: Int): Double {
+    val maxG = 9.0      // g at sensitivity 1
+    val minG = 2.5      // g at sensitivity 10
+    val clamped = maxOf(1, minOf(10, s))
+    val t = (clamped - 1) / 9.0
+    return maxG - t * (maxG - minG)
+}
+
+
 class FallNativeModule(
     reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -17,7 +29,7 @@ class FallNativeModule(
     private var unsubscribe: (() -> Unit)? = null
 
     private fun sendEvent(name: String, params: WritableMap) {
-        Log.i("FallNativeModule", "sendEvent: $name $params")
+        Log.i(TAG, "sendEvent: $name $params")
         reactApplicationContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit(name, params)
@@ -25,12 +37,14 @@ class FallNativeModule(
 
     @ReactMethod
     fun startFallService(sensitivity: Int?, testMode: Boolean?) {
-        val s = sensitivity ?: 5            // fallback if JS somehow sends null
-        val safeTest = testMode ?: false    // default: real mode
+        val s = sensitivity ?: 5          // fallback if JS somehow sends null
+        val safeTest = testMode ?: false  // default: real mode
+
+        val preview = previewImpactG(s)
 
         Log.i(
-            "FallNativeModule",
-            "startFallService called with sensitivity=$s testMode=$safeTest"
+            TAG,
+            "startFallService(sensitivity=$s, testMode=$safeTest, previewImpactG=$preview)"
         )
 
         FallEngine.start(
@@ -38,6 +52,11 @@ class FallNativeModule(
             sensitivity = s,
             testMode = safeTest
         ) { impactG, onFall ->
+            Log.i(
+                TAG,
+                "FallEngine.start callback -> impactG(fromEngine)=$impactG testMode=$safeTest"
+            )
+
             FallDetectorCore(
                 onFall = onFall,
                 thresholds = FallThresholds(impactG = impactG),
@@ -49,20 +68,30 @@ class FallNativeModule(
         unsubscribe?.invoke()
         unsubscribe = FallEngine.subscribe { event ->
             when (event) {
-                is FallEngineEvent.Sample -> {
-                    val m = Arguments.createMap()
-                    m.putDouble("g", event.g.toDouble())
-                    m.putDouble("ts", event.ts.toDouble())
-                    sendEvent("FallEngineSample", m)
+               is FallEngineEvent.Sample -> {
+                    // Always filter by magnitude
+                    if (event.g >= 2.0f) {
+                        val m = Arguments.createMap()
+                        m.putDouble("g", event.g.toDouble())
+                        m.putDouble("ts", event.ts.toDouble())
+                        sendEvent("FallEngineSample", m)
+                    }
                 }
+
                 is FallEngineEvent.Impact -> {
+                    Log.i(
+                        TAG,
+                        "Impact g=${event.g} impactG=${event.impactG} ts=${event.ts}"
+                    )
                     val m = Arguments.createMap()
                     m.putDouble("g", event.g.toDouble())
                     m.putDouble("impactG", event.impactG.toDouble())
                     m.putDouble("ts", event.ts.toDouble())
                     sendEvent("FallEngineImpact", m)
                 }
+
                 is FallEngineEvent.Fall -> {
+                    Log.w(TAG, "FALL event ts=${event.ts}")
                     val m = Arguments.createMap()
                     m.putDouble("ts", event.ts.toDouble())
                     sendEvent("FallEngineFall", m)
@@ -73,17 +102,16 @@ class FallNativeModule(
 
     @ReactMethod
     fun stopFallService() {
-        Log.i("FallNativeModule", "stopFallService called")
+        Log.i(TAG, "stopFallService called")
         unsubscribe?.invoke()
         unsubscribe = null
         FallEngine.stop()
     }
 
-    // 👇 These two are required so React Native's NativeEventEmitter
-    // stops warning about addListener/removeListeners
+    // 👇 Required so React Native's NativeEventEmitter stops warning
     @ReactMethod
     fun addListener(eventName: String) {
-        // no-op, required by RN event emitter
+        // no-op
     }
 
     @ReactMethod
