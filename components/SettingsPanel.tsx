@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { startFallService } from "../core/FallBridge";
 import { useAppEnabled } from "./AppEnabledProvider";
 
 import ImpactTestPanel from "./ImpactTestPanel";
@@ -265,7 +266,9 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [sensitivity, setSensitivity] = useState(5); // 1..10
   const [hydrated, setHydrated] = useState(false);
 
-  const { enabled } = useAppEnabled();
+  const { enabled } = useAppEnabled(); // 👈 only once
+
+  // load saved sensitivity on mount
   React.useEffect(() => {
     (async () => {
       try {
@@ -277,6 +280,26 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     })();
   }, []);
 
+  // save + update native when sensitivity changes
+  React.useEffect(() => {
+    if (!hydrated) return; // wait until we've loaded from storage once
+
+    // 1️⃣ Persist to AsyncStorage
+    AsyncStorage.setItem(SENSITIVITY_KEY, String(sensitivity)).catch(() => {});
+
+    // 2️⃣ If app monitoring is ON, restart native service with new sensitivity
+    if (!enabled) {
+      console.log(
+        `[SettingsPanel] Sensitivity changed → ${sensitivity}, but monitoring is OFF. Will apply on next start.`
+      );
+      return;
+    }
+
+    console.log(
+      `[SettingsPanel] Sensitivity changed → ${sensitivity}. Restarting native fall service…`
+    );
+    startFallService(sensitivity, false);
+  }, [sensitivity, hydrated, enabled]);
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",

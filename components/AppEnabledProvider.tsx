@@ -7,12 +7,10 @@ import React, {
   useMemo,
   useState,
 } from "react";
-// ⬇️ point to the new bridge
 import { startFallService, stopFallService } from "../core/FallBridge";
-// ⬇️ if you already have a settings context, pull sensitivity from it
-// import { useSettings } from "../settings/SettingsContext";
 
 const STORAGE_KEY = "appEnabled:v2";
+const SENSITIVITY_KEY = "sensitivity:v1";
 
 type Setter = boolean | ((prev: boolean) => boolean);
 
@@ -31,59 +29,78 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
   const [enabled, setEnabledState] = useState<boolean>(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // TODO: wire real sensitivity from your settings context
-  const currentSensitivity = 8;
-  // const { sensitivity } = useSettings();
-  // const currentSensitivity = sensitivity ?? 8;
+  // Only manages React state + AsyncStorage (no native calls here)
+  const setEnabled = useCallback((updater: Setter) => {
+    setEnabledState((prev) => {
+      const next =
+        typeof updater === "function"
+          ? (updater as (p: boolean) => boolean)(prev)
+          : updater;
 
-  const setEnabled = useCallback(
-    (updater: Setter) => {
-      setEnabledState((prev) => {
-        const next =
-          typeof updater === "function"
-            ? (updater as (p: boolean) => boolean)(prev)
-            : updater;
+      // persist ON/OFF
+      AsyncStorage.setItem(STORAGE_KEY, next ? "1" : "0").catch(() => {});
 
-        // persist
-        AsyncStorage.setItem(STORAGE_KEY, next ? "1" : "0").catch(() => {});
+      return next;
+    });
+  }, []);
 
-        // side-effect: start/stop native service
-        if (next && !prev) {
-          startFallService(currentSensitivity, false);
-        } else if (!next && prev) {
-          stopFallService();
-        }
-
-        return next;
-      });
-    },
-    [currentSensitivity]
-  );
-
-  // hydrate from storage AND go through setEnabled so bridge is called
+  // 🔁 Hydrate enabled state from storage
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        const rawEnabled = await AsyncStorage.getItem(STORAGE_KEY);
         if (!mounted) return;
 
-        if (raw === "1") {
-          setEnabled(true); // will call startFallService(...)
-        } else if (raw === "0") {
-          setEnabled(false); // will call stopFallService()
+        if (rawEnabled === "1") {
+          setEnabledState(true);
         } else {
-          // first run: default OFF and don't start service
           setEnabledState(false);
         }
       } finally {
         if (mounted) setHydrated(true);
       }
     })();
+
     return () => {
       mounted = false;
     };
-  }, [setEnabled]);
+  }, []);
+
+  // 🧠 Single place that actually talks to native
+  // Whenever enabled flips to true, fetch the *latest* sensitivity from AsyncStorage
+  useEffect(() => {
+    if (!hydrated) return;
+
+    if (enabled) {
+      (async () => {
+        let sensitivity = 5; // default fallback
+
+        try {
+          const rawSens = await AsyncStorage.getItem(SENSITIVITY_KEY);
+          if (rawSens) {
+            const parsed = Number(rawSens);
+            if (!Number.isNaN(parsed)) {
+              // clamp between 1 and 10 just in case
+              sensitivity = Math.max(1, Math.min(10, parsed));
+            }
+          }
+        } catch {
+          // ignore, keep default sensitivity
+        }
+
+        console.log(
+          "[AppEnabled] Enabling fall service with sensitivity",
+          sensitivity
+        );
+        startFallService(sensitivity, false);
+      })();
+    } else {
+      console.log("[AppEnabled] Disabling fall service");
+      stopFallService();
+    }
+  }, [enabled, hydrated]);
 
   const toggle = useCallback(() => setEnabled((p) => !p), [setEnabled]);
 
