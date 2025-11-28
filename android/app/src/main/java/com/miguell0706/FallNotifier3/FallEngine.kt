@@ -148,7 +148,7 @@ object FallEngine : SensorEventListener {
         // In testMode, show more detail so your ImpactTestPanel makes sense
        // Only log "bigger" samples in test mode
         if (testMode && g >= 2.0f) {
-            Log.d(TAG, "sample g=$g ts=$ts")
+\            Log.d(TAG, "BIG sample (>=2g) g=$g ts=$ts")
         }
 
 
