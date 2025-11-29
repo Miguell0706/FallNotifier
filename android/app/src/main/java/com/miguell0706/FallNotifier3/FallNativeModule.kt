@@ -19,7 +19,6 @@ private fun previewImpactG(s: Int): Double {
     return maxG - t * (maxG - minG)
 }
 
-
 class FallNativeModule(
     reactContext: ReactApplicationContext
 ) : ReactContextBaseJavaModule(reactContext) {
@@ -44,32 +43,22 @@ class FallNativeModule(
 
         Log.i(
             TAG,
-            "startFallService(sensitivity=$s, testMode=$safeTest, previewImpactG=$preview)"
+            "startFallService (JS) → sensitivity=$s, testMode=$safeTest, previewImpactG=$preview"
         )
 
-        FallEngine.start(
-            context = reactApplicationContext,
+        // 🔴 Start the FOREGROUND monitoring service
+        FallMonitorService.start(
+            ctx = reactApplicationContext,
             sensitivity = s,
             testMode = safeTest
-        ) { impactG, onFall ->
-            Log.i(
-                TAG,
-                "FallEngine.start callback -> impactG(fromEngine)=$impactG testMode=$safeTest"
-            )
+        )
 
-            FallDetectorCore(
-                onFall = onFall,
-                thresholds = FallThresholds(impactG = impactG),
-                debug = safeTest
-            )
-        }
-
-        // Forward events to JS
+        // 🔁 Forward events from FallEngine → JS (ImpactTestPanel, etc.)
         unsubscribe?.invoke()
         unsubscribe = FallEngine.subscribe { event ->
             when (event) {
-               is FallEngineEvent.Sample -> {
-                    // Always filter by magnitude
+                is FallEngineEvent.Sample -> {
+                    // Only forward "meaningful" motion
                     if (event.g >= 2.0f) {
                         val m = Arguments.createMap()
                         m.putDouble("g", event.g.toDouble())
@@ -102,10 +91,15 @@ class FallNativeModule(
 
     @ReactMethod
     fun stopFallService() {
-        Log.i(TAG, "stopFallService called")
+        Log.i(TAG, "stopFallService (JS) called")
+
+        // 🔁 Stop forwarding events to JS
         unsubscribe?.invoke()
         unsubscribe = null
-        FallEngine.stop()
+
+        // 🔴 Stop the FOREGROUND monitoring service
+        FallMonitorService.stop(reactApplicationContext)
+        // FallEngine.stop() will be called from inside FallMonitorService
     }
 
     // 👇 Required so React Native's NativeEventEmitter stops warning
