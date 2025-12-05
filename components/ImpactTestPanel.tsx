@@ -111,7 +111,12 @@ export default function ImpactTestPanel({
   }, []);
   // Inform global guard about test panel active state
   React.useEffect(() => {
-    setTestPanelActive(true);
+    setTestPanelActive(true); // panel just opened → lock navbar toggle
+
+    return () => {
+      // panel is closing for ANY reason (back, nav change, crash, etc.)
+      setTestPanelActive(false); // unlock navbar toggle
+    };
   }, []);
 
   // Subscribe/unsubscribe based on isRecording
@@ -152,12 +157,8 @@ export default function ImpactTestPanel({
 
   const start = () => {
     if (isRecording) return;
-
-    // Block starting test while real monitoring is ON
     if (enabled) {
-      console.log(
-        "[ImpactTestPanel] start blocked: main guard is enabled (real monitoring)"
-      );
+      console.log("[ImpactTestPanel] start blocked: main guard is enabled");
       return;
     }
 
@@ -168,25 +169,22 @@ export default function ImpactTestPanel({
       "[ImpactTestPanel] starting native fall service with sensitivity",
       sensitivity
     );
-
-    // TEST MODE: true → no real alerts, just visualization
     startFallService(sensitivity, true);
-
-    setIsRecording(true); // start listening
-    setTestPanelActive(true); // lock the toggle in the navbar
+    setIsRecording(true);
   };
+
   const stop = React.useCallback(() => {
     console.log("[ImpactTestPanel] stop() pressed");
+    setIsRecording(false);
 
-    try {
-      stopFallService(); // always call Kotlin stop
-    } catch (e) {
-      console.warn("[ImpactTestPanel] stopFallService error", e);
+    if (!enabled) {
+      try {
+        stopFallService();
+      } catch (e) {
+        console.warn("[ImpactTestPanel] stopFallService error", e);
+      }
     }
-
-    setIsRecording(false); // always update UI
-  }, []);
-
+  }, [enabled]);
   const clear = () => {
     setRows([]);
     setPeakG(1.0);

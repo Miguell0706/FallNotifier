@@ -7,6 +7,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.miguell0706.FallNotifier3.FallAlertService
 
 private const val TAG = "FallNativeModule"
 
@@ -81,10 +82,19 @@ class FallNativeModule(
 
                 is FallEngineEvent.Fall -> {
                     Log.w(TAG, "FALL event ts=${event.ts}")
+
+                    // 🔴 Start native countdown service (10s by default)
+                    FallAlertService.start(
+                        ctx = reactApplicationContext,
+                        seconds = 10 // tweak this later if you want
+                    )
+
+                    // 🔁 Still forward the event to JS for logs / UI
                     val m = Arguments.createMap()
                     m.putDouble("ts", event.ts.toDouble())
                     sendEvent("FallEngineFall", m)
                 }
+
             }
         }
     }
