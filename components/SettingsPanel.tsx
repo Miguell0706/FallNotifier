@@ -43,6 +43,7 @@ const SHADOW = {
   elevation: 8,
 };
 const SENSITIVITY_KEY = "sensitivity:v1";
+const COUNTDOWN_KEY = "countdown:v1";
 
 /* ---------- styles factory (uses fs for responsive fonts) ---------- */
 const makeStyles = (fs: (n: number) => number) =>
@@ -255,6 +256,9 @@ const makeStyles = (fs: (n: number) => number) =>
       alignItems: "center",
     },
     copyBtnLabel: { color: COLORS.text, fontSize: fs(13), fontWeight: "600" },
+    disabledBtn: {
+      opacity: 0.4,
+    },
   });
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
@@ -279,6 +283,19 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
       }
     })();
   }, []);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(COUNTDOWN_KEY);
+        if (raw) {
+          const parsed = Number(raw);
+          if (!Number.isNaN(parsed)) {
+            setCountdownSec(clampCountdown(parsed));
+          }
+        }
+      } catch {}
+    })();
+  }, []);
 
   // save + update native when sensitivity changes
   React.useEffect(() => {
@@ -298,8 +315,8 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
     console.log(
       `[SettingsPanel] Sensitivity changed → ${sensitivity}. Restarting native fall service…`
     );
-    startFallService(sensitivity, false);
-  }, [sensitivity, hydrated, enabled]);
+    startFallService(sensitivity, false, countdownSec);
+  }, [sensitivity, hydrated, enabled, countdownSec]);
   // Donation links (replace with your actual links)
   const DONATION_LINKS = {
     coffee: "https://buymeacoffee.com/miguellozano3757",
@@ -392,10 +409,19 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const clampCountdown = (n: number) => Math.max(0, Math.min(60, n));
   const clampSensitivity = (n: number) => Math.max(1, Math.min(10, n));
   const incCountdown = () =>
-    setCountdownSec((prev) => clampCountdown((prev ?? 0) + 1));
+    setCountdownSec((prev) => {
+      const next = clampCountdown((prev ?? 0) + 1); // now max 10
+      AsyncStorage.setItem(COUNTDOWN_KEY, String(next)).catch(() => {});
+      return next;
+    });
 
   const decCountdown = () =>
-    setCountdownSec((prev) => clampCountdown((prev ?? 0) - 1));
+    setCountdownSec((prev) => {
+      const next = clampCountdown((prev ?? 0) - 1); // now min 0
+      AsyncStorage.setItem(COUNTDOWN_KEY, String(next)).catch(() => {});
+      return next;
+    });
+
   const incSensitivity = () =>
     setSensitivity((prev) => clampSensitivity((prev ?? 1) + 1));
 
@@ -430,8 +456,12 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
           <View style={styles.stepperRow}>
             <Pressable
               onPress={decCountdown}
+              disabled={countdownSec <= 0}
               android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-              style={styles.stepBtn}
+              style={[
+                styles.stepBtn,
+                countdownSec <= 0 && styles.disabledBtn, // 👈 dim button
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Decrease countdown"
               hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
@@ -441,14 +471,24 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
 
             <TextInput
               value={String(countdownSec)}
-              onChangeText={(t) => {
+              onChangeText={async (t) => {
                 const parsed = parseInt(t, 10);
                 if (!Number.isNaN(parsed)) {
-                  setCountdownSec(clampCountdown(parsed));
+                  const clamped = clampCountdown(parsed);
+                  setCountdownSec(clamped);
+                  try {
+                    await AsyncStorage.setItem(COUNTDOWN_KEY, String(clamped));
+                  } catch {}
                 }
               }}
               onBlur={() => {
-                setCountdownSec((v) => clampCountdown(v));
+                setCountdownSec((v) => {
+                  const clamped = clampCountdown(v);
+                  AsyncStorage.setItem(COUNTDOWN_KEY, String(clamped)).catch(
+                    () => {}
+                  );
+                  return clamped;
+                });
               }}
               keyboardType="number-pad"
               style={[styles.input, styles.stepInput]}
@@ -458,7 +498,11 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
             <Pressable
               onPress={incCountdown}
               android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-              style={styles.stepBtn}
+              disabled={countdownSec >= 10} // 👈 Disable at max 10
+              style={[
+                styles.stepBtn,
+                countdownSec >= 10 && styles.disabledBtn, // 👈 dim button
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Increase countdown"
               hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}

@@ -7,7 +7,6 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.miguell0706.FallNotifier3.FallAlertService
 
 private const val TAG = "FallNativeModule"
 
@@ -28,6 +27,10 @@ class FallNativeModule(
 
     private var unsubscribe: (() -> Unit)? = null
 
+    // Remember latest flags so we can use them in the FALL handler
+    private var lastTestMode: Boolean = false
+    private var lastCountdownSec: Int = 10
+
     private fun sendEvent(name: String, params: WritableMap) {
         Log.i(TAG, "sendEvent: $name $params")
         reactApplicationContext
@@ -36,15 +39,19 @@ class FallNativeModule(
     }
 
     @ReactMethod
-    fun startFallService(sensitivity: Int?, testMode: Boolean?) {
-        val s = sensitivity ?: 5          // fallback if JS somehow sends null
-        val safeTest = testMode ?: false  // default: real mode
+    fun startFallService(sensitivity: Int?, testMode: Boolean?, countdownSec: Int?) {
+        val s = sensitivity ?: 5           // fallback if JS somehow sends null
+        val safeTest = testMode ?: false   // default: real mode
+        val countdown = countdownSec ?: 10 // default: 10s
+
+        lastTestMode = safeTest
+        lastCountdownSec = countdown
 
         val preview = previewImpactG(s)
 
         Log.i(
             TAG,
-            "startFallService (JS) → sensitivity=$s, testMode=$safeTest, previewImpactG=$preview"
+            "startFallService (JS) → sensitivity=$s, testMode=$safeTest, countdown=$countdown, previewImpactG=$preview"
         )
 
         // 🔴 Start the FOREGROUND monitoring service
@@ -81,20 +88,30 @@ class FallNativeModule(
                 }
 
                 is FallEngineEvent.Fall -> {
-                    Log.w(TAG, "FALL event ts=${event.ts}")
+                    Log.w(TAG, "FALL event ts=${event.ts} testMode=$lastTestMode")
 
-                    // 🔴 Start native countdown service (10s by default)
-                    FallAlertService.start(
-                        ctx = reactApplicationContext,
-                        seconds = 10 // tweak this later if you want
-                    )
+                    // ✅ Only start real alert countdown when NOT in test mode
+                    if (!lastTestMode) {
+                        Log.i(
+                            TAG,
+                            "Starting FallAlertService with countdown=$lastCountdownSec"
+                        )
+                        FallAlertService.start(
+                            ctx = reactApplicationContext,
+                            seconds = lastCountdownSec
+                        )
+                    } else {
+                        Log.d(
+                            TAG,
+                            "Test mode active → not starting FallAlertService"
+                        )
+                    }
 
                     // 🔁 Still forward the event to JS for logs / UI
                     val m = Arguments.createMap()
                     m.putDouble("ts", event.ts.toDouble())
                     sendEvent("FallEngineFall", m)
                 }
-
             }
         }
     }

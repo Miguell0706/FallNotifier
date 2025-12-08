@@ -11,6 +11,7 @@ import { startFallService, stopFallService } from "../core/FallBridge";
 
 const STORAGE_KEY = "appEnabled:v2";
 const SENSITIVITY_KEY = "sensitivity:v1";
+const COUNTDOWN_KEY = "countdown:v1";
 
 type Setter = boolean | ((prev: boolean) => boolean);
 
@@ -76,6 +77,7 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
     if (enabled) {
       (async () => {
         let sensitivity = 5; // default fallback
+        let countdown = 10; // default fallback
 
         try {
           const rawSens = await AsyncStorage.getItem(SENSITIVITY_KEY);
@@ -90,11 +92,21 @@ export const AppEnabledProvider: React.FC<{ children: React.ReactNode }> = ({
           // ignore, keep default sensitivity
         }
 
+        try {
+          const rawC = await AsyncStorage.getItem(COUNTDOWN_KEY);
+          if (rawC) {
+            const parsed = Number(rawC);
+            if (!Number.isNaN(parsed)) {
+              countdown = Math.max(0, Math.min(60, parsed));
+            }
+          }
+        } catch {}
+
         console.log(
           "[AppEnabled] Enabling fall service with sensitivity",
           sensitivity
         );
-        startFallService(sensitivity, false);
+        startFallService(sensitivity, false, countdown);
       })();
     } else {
       console.log("[AppEnabled] Disabling fall service");

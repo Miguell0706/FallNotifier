@@ -20,8 +20,16 @@ if (!FallNativeModule && __DEV__) {
   );
 }
 
-export function startFallService(sensitivity: number, testMode = false) {
-  return FallNativeModule?.startFallService?.(sensitivity, testMode);
+export function startFallService(
+  sensitivity: number,
+  testMode = false,
+  countdownSec = 10
+) {
+  return FallNativeModule?.startFallService?.(
+    sensitivity,
+    testMode,
+    countdownSec
+  );
 }
 
 export function stopFallService() {
