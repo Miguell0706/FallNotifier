@@ -31,6 +31,9 @@ class FallAlertService : Service() {
 
     const val EXTRA_SECONDS   = "seconds"
 
+    @Volatile
+    var isRunning: Boolean = false   // 👈 add this
+
     fun start(ctx: Context, seconds: Int = 10) {
       val intent = Intent(ctx, FallAlertService::class.java).apply {
         action = ACTION_START
@@ -55,9 +58,11 @@ class FallAlertService : Service() {
 
     val action = intent?.action
     Log.i(TAG, "onStartCommand action=$action startId=$startId")
+    val secs = intent?.getIntExtra(EXTRA_SECONDS, 10) ?: 10
 
     val fsIntent = Intent(this, CountdownActivity::class.java)
       .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      .putExtra(EXTRA_SECONDS, secs)   // 👈 pass starting seconds to UI
 
     val fsPending = PendingIntent.getActivity(
       this,
@@ -97,34 +102,33 @@ class FallAlertService : Service() {
       }
 
 
-      ACTION_START -> {
-        val secs = intent.getIntExtra(EXTRA_SECONDS, 10)
+    ACTION_START -> {
         Log.i(TAG, "ACTION_START received → seconds=$secs running=$running")
 
-        // Foreground notification for active countdown
-        val notif = buildNotification(remaining = null, fsPending = fsPending)
+        // 👇 use the real seconds instead of null, so no “Preparing countdown…” gap
+        val notif = buildNotification(remaining = secs, fsPending = fsPending)
         startForeground(NOTIF_ID, notif)
 
         if (!running) {
-          // Only the first ACTION_START per fall should show the fullscreen UI
-          try {
-            val km = getSystemService(KeyguardManager::class.java)
-            Log.d(TAG, "Keyguard locked? ${km?.isKeyguardLocked}")
-            if (km?.isKeyguardLocked == true) {
-              Log.i(TAG, "Launching CountdownActivity over lockscreen")
-              startActivity(fsIntent)
+            try {
+                val km = getSystemService(KeyguardManager::class.java)
+                Log.d(TAG, "Keyguard locked? ${km?.isKeyguardLocked}")
+                if (km?.isKeyguardLocked == true) {
+                    Log.i(TAG, "Launching CountdownActivity over lockscreen")
+                    startActivity(fsIntent)
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "Error starting fullscreen activity: ${t.message}")
             }
-          } catch (t: Throwable) {
-            Log.w(TAG, "Error starting fullscreen activity: ${t.message}")
-          }
 
-          resetCountdown(secs)
+            resetCountdown(secs)
         } else {
-          Log.i(TAG, "ACTION_START while already running → ignoring extra start")
+            Log.i(TAG, "ACTION_START while already running → ignoring extra start")
         }
 
         return START_STICKY
       }
+
 
       else -> {
         Log.w(TAG, "onStartCommand with null/unknown action, restarting foreground countdown")
@@ -136,13 +140,14 @@ class FallAlertService : Service() {
   }
 
   // Restart countdown with new value
-  private fun resetCountdown(newSeconds: Int = 10) {
-    Log.i(TAG, "resetCountdown newSeconds=$newSeconds (was $seconds)")
-    handler.removeCallbacks(ticker)
-    seconds = newSeconds
-    running = true
-    handler.post(ticker)
-  }
+private fun resetCountdown(newSeconds: Int = 10) {
+  Log.i(TAG, "resetCountdown newSeconds=$newSeconds (was $seconds)")
+  handler.removeCallbacks(ticker)
+  seconds = newSeconds
+  running = true
+  isRunning = true            // 👈 mark as running globally
+  handler.post(ticker)
+}
 
   private fun sendNow() {
     Log.i(TAG, "sendNow() called → TODO: implement SMS sending")
@@ -152,7 +157,16 @@ class FallAlertService : Service() {
 private fun stopSelfCleanly() {
   Log.i(TAG, "stopSelfCleanly() called, stopping service + foreground")
 
+  // Let the UI know countdown is finished
+  sendBroadcast(
+    Intent(ACTION_TICK)
+      .putExtra(EXTRA_SECONDS, 0)
+      .putExtra("done", true)
+  )
+
   running = false
+  isRunning = false           // 👈 mark as stopped
+
   handler.removeCallbacks(ticker)
 
   if (Build.VERSION.SDK_INT >= 24) {
@@ -165,8 +179,10 @@ private fun stopSelfCleanly() {
 }
 
 
+
   // Runnable that fires every second
 // Runnable that fires every second
+// in ticker:
 private val ticker = object : Runnable {
   override fun run() {
     Log.d(TAG, "tick seconds=$seconds running=$running")
@@ -175,8 +191,8 @@ private val ticker = object : Runnable {
 
     // Broadcast to CountdownActivity
     val tickIntent = Intent(ACTION_TICK).apply {
-      setPackage(packageName)              // make sure it stays inside your app
-      putExtra("seconds", seconds)
+      setPackage(packageName)
+      putExtra(EXTRA_SECONDS, seconds)   // 👈 use EXTRA_SECONDS here
       putExtra("done", done)
     }
     sendBroadcast(tickIntent)
@@ -195,6 +211,7 @@ private val ticker = object : Runnable {
     }
   }
 }
+
 
 
   // Build notification with optional countdown + optional fullscreen intent
@@ -241,6 +258,11 @@ private val ticker = object : Runnable {
       .addAction(0, "Send now", sendNowPI)
       .addAction(0, "Cancel",   cancelPI)
       .build()
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    isRunning = false           // 👈 extra safety
   }
 
   override fun onBind(intent: Intent?): IBinder? = null

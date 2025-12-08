@@ -18,145 +18,172 @@ import androidx.activity.ComponentActivity
 
 class CountdownActivity : ComponentActivity() {
 
-  private lateinit var countdownView: TextView
+    private lateinit var countdownView: TextView
+    private var tickRegistered = false
 
-  // ---- Receives ticks from your foreground service ----
- private val tickReceiver = object : BroadcastReceiver() {
-  override fun onReceive(context: Context, intent: Intent) {
-    if (intent.action == FallAlertService.ACTION_TICK) {
-      val s = intent.getIntExtra("seconds", -1)
-      val done = intent.getBooleanExtra("done", false)
-      Log.d("CountdownActivity", "onReceive ACTION_TICK seconds=$s done=$done")
+    // ---- Receives ticks from FallAlertService ----
+    private val tickReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != FallAlertService.ACTION_TICK) return
 
-      if (s >= 0) countdownView.text = "Sending in ${s}s…"
-      if (done) finish()
-    }
-  }
-}
+            val s = intent.getIntExtra(FallAlertService.EXTRA_SECONDS, -1)
+            val done = intent.getBooleanExtra("done", false)
 
-  private var tickRegistered = false
+            Log.d("CountdownActivity", "onReceive ACTION_TICK seconds=$s done=$done")
 
-  override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    Log.d("CountdownActivity", "onCreate")
+            if (s >= 0) {
+                countdownView.text = "Sending in ${s}s…"
+            }
 
-    // Make sure we really show on the lock screen and turn the screen on
-    setShowWhenLocked(true)
-    setTurnScreenOn(true)
-    @Suppress("DEPRECATION")
-    window.addFlags(
-      WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-      WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-    )
-
-    // ---- Simple programmatic UI ----
-    val root = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      setBackgroundColor(Color.parseColor("#CC000000")) // translucent black
-      gravity = Gravity.CENTER
-      setPadding(48, 64, 48, 64)
-    }
-
-    val titleView = TextView(this).apply {
-      text = "Fall detected"
-      setTextColor(Color.WHITE)
-      textSize = 24f
-      setPadding(0, 0, 0, 16)
-      gravity = Gravity.CENTER
-    }
-
-    countdownView = TextView(this).apply {
-      text = "Preparing…"    // will be updated by ticks
-      setTextColor(Color.WHITE)
-      textSize = 42f
-      setPadding(0, 0, 0, 32)
-      gravity = Gravity.CENTER
-    }
-
-    val sendBtn = Button(this).apply {
-      text = "Send now"
-      setOnClickListener {
-        val i = Intent(this@CountdownActivity, FallAlertService::class.java)
-          .setAction(FallAlertService.ACTION_SEND_NOW)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-          startForegroundService(i)
-        } else {
-          startService(i)
+            if (done) {
+                countdownView.text = "Sending now…"
+                finish()
+            }
         }
-        finish()
-      }
     }
 
-    val cancelBtn = Button(this).apply {
-      text = "Cancel"
-      setOnClickListener {
-        val i = Intent(this@CountdownActivity, FallAlertService::class.java)
-          .setAction(FallAlertService.ACTION_CANCEL)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-          startForegroundService(i)
-        } else {
-          startService(i)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        Log.d("CountdownActivity", "onCreate")
+
+        if (!FallAlertService.isRunning) {
+          Log.d("CountdownActivity", "FallAlertService not running → finishing immediately")
+          finish()
+          return
+    }
+        // Show over lockscreen, wake screen
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+        )
+
+        // ---- Simple UI ----
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#CC000000"))
+            gravity = Gravity.CENTER
+            setPadding(48, 64, 48, 64)
         }
-        finish()
-      }
+
+        val titleView = TextView(this).apply {
+            text = "Fall detected"
+            setTextColor(Color.WHITE)
+            textSize = 24f
+            setPadding(0, 0, 0, 16)
+            gravity = Gravity.CENTER
+        }
+
+        countdownView = TextView(this).apply {
+            text = "Preparing…"
+            setTextColor(Color.WHITE)
+            textSize = 42f
+            setPadding(0, 0, 0, 32)
+            gravity = Gravity.CENTER
+        }
+
+        val sendBtn = Button(this).apply {
+            text = "Send now"
+            setOnClickListener {
+                val i = Intent(this@CountdownActivity, FallAlertService::class.java)
+                    .setAction(FallAlertService.ACTION_SEND_NOW)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(i)
+                } else {
+                    startService(i)
+                }
+                finish()
+            }
+        }
+
+        val cancelBtn = Button(this).apply {
+            text = "Cancel"
+            setOnClickListener {
+                val i = Intent(this@CountdownActivity, FallAlertService::class.java)
+                    .setAction(FallAlertService.ACTION_CANCEL)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(i)
+                } else {
+                    startService(i)
+                }
+                finish()
+            }
+        }
+
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { setMargins(16, 0, 16, 0) }
+            addView(sendBtn, lp)
+            addView(cancelBtn, lp)
+        }
+
+        root.addView(titleView)
+        root.addView(countdownView)
+        root.addView(buttons)
+        setContentView(root)
+
+        Toast.makeText(this, "CountdownActivity launched", Toast.LENGTH_SHORT).show()
+
+        // Initialize from extras (for the very first frame)
+        val initialSeconds =
+            intent?.getIntExtra(FallAlertService.EXTRA_SECONDS, -1) ?: -1
+        if (initialSeconds >= 0) {
+            countdownView.text = "Sending in ${initialSeconds}s…"
+        }
+
+        // Start listening for ticks
+        registerTickReceiver()
     }
 
-    val buttons = LinearLayout(this).apply {
-      orientation = LinearLayout.HORIZONTAL
-      gravity = Gravity.CENTER
-      val lp = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.WRAP_CONTENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-      ).apply { setMargins(16, 0, 16, 0) }
-      addView(sendBtn, lp)
-      addView(cancelBtn, lp)
+    // When ACTION_START hits an existing singleTop activity
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        Log.d("CountdownActivity", "onNewIntent")
+        setIntent(intent)
+
+            // Again: if service already died, just close
+        if (!FallAlertService.isRunning) {
+            Log.d("CountdownActivity", "onNewIntent but service not running → finishing")
+            finish()
+            return
+        }
+        val initialSeconds =
+            intent?.getIntExtra(FallAlertService.EXTRA_SECONDS, -1) ?: -1
+        if (initialSeconds >= 0) {
+            countdownView.text = "Sending in ${initialSeconds}s…"
+        }
     }
 
-    root.addView(titleView)
-    root.addView(countdownView)
-    root.addView(buttons)
-    setContentView(root)
-
-    Toast.makeText(this, "CountdownActivity launched", Toast.LENGTH_SHORT).show()
-
-    // Register receiver once for this Activity lifecycle
-    registerTickReceiver()
-  }
-
-  // Called if Activity is re-used with launchMode="singleTop"
-  override fun onNewIntent(intent: Intent?) {
-    super.onNewIntent(intent)
-    Log.d("CountdownActivity", "onNewIntent")
-    setIntent(intent)
-    // No countdown restart here – service owns the timer
-  }
-
-  override fun onDestroy() {
-    super.onDestroy()
-    unregisterReceiverSafe()
-    Log.d("CountdownActivity", "onDestroy → receiver unregistered")
-  }
-
-  // --- Helpers ---
-
-  private fun registerTickReceiver() {
-    if (tickRegistered) return
-    val filter = IntentFilter(FallAlertService.ACTION_TICK)
-    if (Build.VERSION.SDK_INT >= 33) {
-      registerReceiver(tickReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-    } else {
-      @Suppress("DEPRECATION")
-      registerReceiver(tickReceiver, filter)
+    private fun registerTickReceiver() {
+        if (tickRegistered) return
+        val filter = IntentFilter(FallAlertService.ACTION_TICK)
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(tickReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(tickReceiver, filter)
+        }
+        tickRegistered = true
     }
-    tickRegistered = true
-  }
 
-  private fun unregisterReceiverSafe() {
-    if (!tickRegistered) return
-    try {
-      unregisterReceiver(tickReceiver)
-    } catch (_: Throwable) {
+    private fun unregisterReceiverSafe() {
+        if (!tickRegistered) return
+        try {
+            unregisterReceiver(tickReceiver)
+        } catch (_: Throwable) {
+        }
+        tickRegistered = false
     }
-    tickRegistered = false
-  }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiverSafe()
+        Log.d("CountdownActivity", "onDestroy → receiver unregistered")
+    }
 }
