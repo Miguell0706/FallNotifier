@@ -149,10 +149,34 @@ private fun resetCountdown(newSeconds: Int = 10) {
   handler.post(ticker)
 }
 
-  private fun sendNow() {
-    Log.i(TAG, "sendNow() called → TODO: implement SMS sending")
-    // later: hook in Twilio / backend / SMS logic
+ private fun sendNow() {
+  // Basic log so you always know it fired
+  Log.i(TAG, "sendNow() TEST — reached sendNow() in FallAlertService")
+
+  // If you've added Prefs.kt and are syncing JS → native,
+  // we can also log what native sees for contacts + message:
+  try {
+    val contacts = Prefs.loadContacts(this)
+    val template = Prefs.loadMessage(this)
+
+    Log.i(TAG, "sendNow() TEST — loaded ${contacts.size} contacts from Prefs")
+    contacts.forEachIndexed { index, number ->
+      Log.i(TAG, "sendNow() TEST — contact[$index] = $number")
+    }
+
+    Log.i(TAG, "sendNow() TEST — message template = \"$template\"")
+
+    // If you want, we can also simulate a link:
+    val fakeLink = "https://maps.google.com/?q=0,0"
+    val finalMessage = template.replace("{link}", fakeLink)
+    Log.i(TAG, "sendNow() TEST — final message would be: \"$finalMessage\"")
+  } catch (t: Throwable) {
+    Log.e(TAG, "sendNow() TEST — error while loading from Prefs: ${t.message}", t)
   }
+
+  // ⛔ No network calls here yet — pure logging test
+}
+
 
 private fun stopSelfCleanly() {
   Log.i(TAG, "stopSelfCleanly() called, stopping service + foreground")

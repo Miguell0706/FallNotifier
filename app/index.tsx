@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Font from "expo-font";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef, useState } from "react";
@@ -12,6 +11,9 @@ import NumbersList from "../components/NumbersList";
 import PhoneNumberInput from "../components/PhoneNumberInput";
 import SettingsModal from "../components/SettingsModal";
 import SettingsPanel from "../components/SettingsPanel";
+import { loadContacts, saveContacts } from "../storage/contacts";
+import { syncContactsToNative } from "../storage/nativeSync";
+
 const loadFonts = async () => {
   await Font.loadAsync({
     Construction: require("../assets/fonts/Construction.otf"),
@@ -27,7 +29,7 @@ const Home: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const hydratedRef = useRef(false);
 
-  // Load fonts (separate; don't block if it errors)
+  // 1) Load fonts
   useEffect(() => {
     loadFonts()
       .then(() => setFontsLoaded(true))
@@ -37,28 +39,29 @@ const Home: React.FC = () => {
       });
   }, []);
 
-  // Hydrate numbers once
+  // 2) Hydrate contacts once
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem("phoneNumbers");
-        if (stored) setPhoneNumbers(JSON.parse(stored));
+        const saved = await loadContacts();
+        setPhoneNumbers(saved);
       } catch (e) {
-        console.error("Error initializing app (storage load):", e);
+        console.error("Error loading contacts:", e);
       } finally {
         hydratedRef.current = true;
       }
     })();
   }, []);
 
-  // Persist after hydration
+  // 3) Persist + sync contacts after hydration
   useEffect(() => {
     if (!hydratedRef.current) return;
-    AsyncStorage.setItem("phoneNumbers", JSON.stringify(phoneNumbers)).catch(
-      (err) => console.error("Failed to save phone numbers:", err)
-    );
+
+    saveContacts(phoneNumbers);
+    syncContactsToNative(phoneNumbers);
   }, [phoneNumbers]);
 
+  // ✅ early return AFTER all hooks
   if (!fontsLoaded) return <LoadingIndicator />;
 
   const handleAddPress = (number: string) => {
@@ -80,24 +83,24 @@ const Home: React.FC = () => {
     >
       <SafeAreaView style={styles.safeArea}>
         <NavBar onSettingsPress={() => setSettingsOpen((s) => !s)} />
+
         <View style={styles.inputFlageContainer}>
           <PhoneNumberInput
             phoneNumber={phoneNumber}
             setPhoneNumber={setPhoneNumber}
             onAddPress={handleAddPress}
           />
-          <DisabledBanner></DisabledBanner>
+          <DisabledBanner />
         </View>
+
         <View style={styles.mapListContainer}>
           <NumbersList
             phoneNumbers={phoneNumbers}
             onDelete={handleDeleteNumber}
           />
 
-          {/* Map + slide-in settings share this wrapper */}
           <View style={styles.mapSettingsContainer}>
             <GMap />
-
             <SettingsModal open={settingsOpen}>
               <SettingsPanel />
             </SettingsModal>
@@ -121,7 +124,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   mapListContainer: { flex: 1, flexDirection: "row" },
-  mapSettingsContainer: { flex: 1, position: "relative" }, // <- fixed braces
+  mapSettingsContainer: { flex: 1, position: "relative" },
 });
 
 export default Home;

@@ -11,14 +11,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
 import { startFallService } from "../core/FallBridge";
+import { loadAlertMessage } from "../storage/contacts";
+import { syncMessageToNative } from "../storage/nativeSync";
 import { useAppEnabled } from "./AppEnabledProvider";
 
 import ImpactTestPanel from "./ImpactTestPanel";
+import MessageAndCountdown from "./MessageAndCountdown";
 type Screen = "menu" | "message" | "test" | "sensitivity" | "faq" | "donate";
 type Props = { phoneNumbers?: string[] };
 
@@ -263,15 +265,34 @@ const makeStyles = (fs: (n: number) => number) =>
 
 export default function SettingsPanel({ phoneNumbers = [] }: Props) {
   const [screen, setScreen] = useState<Screen>("menu");
-  const [messageTemplate, setMessageTemplate] = useState(
-    "I may have fallen. My location: {link}"
-  );
   const [countdownSec, setCountdownSec] = useState(10);
   const [sensitivity, setSensitivity] = useState(5); // 1..10
   const [hydrated, setHydrated] = useState(false);
-
+  const [messageTemplate, setMessageTemplate] = useState(
+    " I may have fallen. My location: {link}"
+  );
+  const [messageHydrated, setMessageHydrated] = useState(false);
   const { enabled } = useAppEnabled(); // 👈 only once
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const saved = await loadAlertMessage();
+        console.log(
+          "[SettingsPanel] Loaded alert message from storage:",
+          saved
+        );
+        if (saved) {
+          setMessageTemplate(saved);
+        }
+      } catch (e) {
+        console.error("Failed to load alert message:", e);
+      } finally {
+        setMessageHydrated(true);
+        console.log("[SettingsPanel] messageHydrated -> true");
+      }
+    })();
+  }, []);
   // load saved sensitivity on mount
   React.useEffect(() => {
     (async () => {
@@ -408,113 +429,12 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
 
   const clampCountdown = (n: number) => Math.max(0, Math.min(60, n));
   const clampSensitivity = (n: number) => Math.max(1, Math.min(10, n));
-  const incCountdown = () =>
-    setCountdownSec((prev) => {
-      const next = clampCountdown((prev ?? 0) + 1); // now max 10
-      AsyncStorage.setItem(COUNTDOWN_KEY, String(next)).catch(() => {});
-      return next;
-    });
-
-  const decCountdown = () =>
-    setCountdownSec((prev) => {
-      const next = clampCountdown((prev ?? 0) - 1); // now min 0
-      AsyncStorage.setItem(COUNTDOWN_KEY, String(next)).catch(() => {});
-      return next;
-    });
 
   const incSensitivity = () =>
     setSensitivity((prev) => clampSensitivity((prev ?? 1) + 1));
 
   const decSensitivity = () =>
     setSensitivity((prev) => clampSensitivity((prev ?? 1) - 1));
-  const MessageAndCountdown = () => (
-    <View style={styles.panel}>
-      <Text style={styles.sectionTitle}>Message & Countdown</Text>
-      <ScrollView
-        contentContainerStyle={styles.panelBody}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Field
-          label="Message template"
-          hint="Use {link} where the map URL should go. Keep it under ~160 GSM chars for 1 SMS segment."
-        >
-          <TextInput
-            value={messageTemplate}
-            onChangeText={setMessageTemplate}
-            multiline
-            style={[styles.input, { height: 110 }]}
-            placeholder="I may have fallen. My location: {link}"
-            placeholderTextColor={COLORS.textMuted}
-            selectionColor={COLORS.primary}
-          />
-        </Field>
-
-        <Field
-          label="Countdown (seconds)"
-          hint="Delay before sending so you can cancel an accidental alert."
-        >
-          <View style={styles.stepperRow}>
-            <Pressable
-              onPress={decCountdown}
-              disabled={countdownSec <= 0}
-              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-              style={[
-                styles.stepBtn,
-                countdownSec <= 0 && styles.disabledBtn, // 👈 dim button
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Decrease countdown"
-              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-            >
-              <Text style={styles.stepBtnLabel}>−</Text>
-            </Pressable>
-
-            <TextInput
-              value={String(countdownSec)}
-              onChangeText={async (t) => {
-                const parsed = parseInt(t, 10);
-                if (!Number.isNaN(parsed)) {
-                  const clamped = clampCountdown(parsed);
-                  setCountdownSec(clamped);
-                  try {
-                    await AsyncStorage.setItem(COUNTDOWN_KEY, String(clamped));
-                  } catch {}
-                }
-              }}
-              onBlur={() => {
-                setCountdownSec((v) => {
-                  const clamped = clampCountdown(v);
-                  AsyncStorage.setItem(COUNTDOWN_KEY, String(clamped)).catch(
-                    () => {}
-                  );
-                  return clamped;
-                });
-              }}
-              keyboardType="number-pad"
-              style={[styles.input, styles.stepInput]}
-              selectionColor={COLORS.primary}
-            />
-
-            <Pressable
-              onPress={incCountdown}
-              android_ripple={{ color: "rgba(255,255,255,0.08)" }}
-              disabled={countdownSec >= 10} // 👈 Disable at max 10
-              style={[
-                styles.stepBtn,
-                countdownSec >= 10 && styles.disabledBtn, // 👈 dim button
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Increase countdown"
-              hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
-            >
-              <Text style={styles.stepBtnLabel}>+</Text>
-            </Pressable>
-          </View>
-        </Field>
-      </ScrollView>
-      <Back onPress={() => setScreen("menu")} />
-    </View>
-  );
 
   const SensitivityPage = () => (
     <View style={styles.panel}>
@@ -691,7 +611,25 @@ export default function SettingsPanel({ phoneNumbers = [] }: Props) {
 
         {/* Content */}
         {screen === "menu" && <Menu />}
-        {screen === "message" && <MessageAndCountdown />}
+        {screen === "message" && (
+          <MessageAndCountdown
+            styles={styles}
+            messageTemplate={messageTemplate}
+            setMessageTemplate={setMessageTemplate}
+            countdownSec={countdownSec}
+            setCountdownSec={setCountdownSec}
+            clampCountdown={clampCountdown}
+            onBack={() => {
+              console.log(
+                "[SettingsPanel] Back from Message screen, syncing to native with:",
+                messageTemplate
+              );
+              syncMessageToNative(messageTemplate);
+              setScreen("menu");
+            }}
+          />
+        )}
+
         {screen === "test" && (
           <ImpactTestPanel
             styles={styles}

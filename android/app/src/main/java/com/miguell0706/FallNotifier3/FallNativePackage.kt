@@ -6,9 +6,12 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 class FallNativePackage : ReactPackage {
-    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(FallNativeModule(reactContext))
-    }
+   override fun createNativeModules(reactContext: ReactApplicationContext) =
+    listOf(
+        PrefsModule(reactContext),
+        FallNativeModule(reactContext)
+    )
+
 
     override fun createViewManagers(
         reactContext: ReactApplicationContext
