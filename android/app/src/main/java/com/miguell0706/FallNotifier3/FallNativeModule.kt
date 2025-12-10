@@ -129,6 +129,14 @@ class FallNativeModule(
         // FallEngine.stop() will be called from inside FallMonitorService
     }
 
+    override fun onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy()
+
+        // Clean up subscription
+        unsubscribe?.invoke()
+        unsubscribe = null
+    }
+
     // 👇 Required so React Native's NativeEventEmitter stops warning
     @ReactMethod
     fun addListener(eventName: String) {

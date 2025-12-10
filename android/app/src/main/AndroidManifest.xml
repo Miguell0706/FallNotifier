@@ -12,6 +12,7 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -32,7 +33,8 @@
     <service
       android:name=".FallAlertService"
       android:exported="false"
-      android:foregroundServiceType="dataSync" />
+      android:foregroundServiceType="dataSync"
+      android:stopWithTask="false" />
 
     <service
       android:name=".FallMonitorService"

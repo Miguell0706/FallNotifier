@@ -14,6 +14,14 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import android.location.Location
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 // ---- Background Service ----
 class FallAlertService : Service() {
@@ -31,8 +39,12 @@ class FallAlertService : Service() {
 
     const val EXTRA_SECONDS   = "seconds"
 
+    const val EXTRA_LAT      = "lat"
+    const val EXTRA_LON      = "lon"
+    const val EXTRA_MAPS_URL = "mapsUrl"
+
     @Volatile
-    var isRunning: Boolean = false   // 👈 add this
+    var isRunning: Boolean = false
 
     fun start(ctx: Context, seconds: Int = 10) {
       val intent = Intent(ctx, FallAlertService::class.java).apply {
@@ -53,6 +65,14 @@ class FallAlertService : Service() {
   private val handler = Handler(Looper.getMainLooper())
   private var running = false
 
+  private lateinit var fusedClient: com.google.android.gms.location.FusedLocationProviderClient
+
+  override fun onCreate() {
+    super.onCreate()
+    fusedClient = LocationServices.getFusedLocationProviderClient(this)
+    Log.d(TAG, "FallAlertService created, fused location ready")
+  }
+
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Notif.ensureChannel(this)
 
@@ -62,7 +82,7 @@ class FallAlertService : Service() {
 
     val fsIntent = Intent(this, CountdownActivity::class.java)
       .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-      .putExtra(EXTRA_SECONDS, secs)   // 👈 pass starting seconds to UI
+      .putExtra(EXTRA_SECONDS, secs)
 
     val fsPending = PendingIntent.getActivity(
       this,
@@ -96,39 +116,35 @@ class FallAlertService : Service() {
           Log.e(TAG, "startForeground() failed in ACTION_CANCEL: ${t.message}", t)
         }
 
-        // Even if countdown already finished, this is safe
         stopSelfCleanly()
         return START_NOT_STICKY
       }
 
-
-    ACTION_START -> {
+      ACTION_START -> {
         Log.i(TAG, "ACTION_START received → seconds=$secs running=$running")
 
-        // 👇 use the real seconds instead of null, so no “Preparing countdown…” gap
         val notif = buildNotification(remaining = secs, fsPending = fsPending)
         startForeground(NOTIF_ID, notif)
 
         if (!running) {
-            try {
-                val km = getSystemService(KeyguardManager::class.java)
-                Log.d(TAG, "Keyguard locked? ${km?.isKeyguardLocked}")
-                if (km?.isKeyguardLocked == true) {
-                    Log.i(TAG, "Launching CountdownActivity over lockscreen")
-                    startActivity(fsIntent)
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "Error starting fullscreen activity: ${t.message}")
+          try {
+            val km = getSystemService(KeyguardManager::class.java)
+            Log.d(TAG, "Keyguard locked? ${km?.isKeyguardLocked}")
+            if (km?.isKeyguardLocked == true) {
+              Log.i(TAG, "Launching CountdownActivity over lockscreen")
+              startActivity(fsIntent)
             }
+          } catch (t: Throwable) {
+            Log.w(TAG, "Error starting fullscreen activity: ${t.message}")
+          }
 
-            resetCountdown(secs)
+          resetCountdown(secs)
         } else {
-            Log.i(TAG, "ACTION_START while already running → ignoring extra start")
+          Log.i(TAG, "ACTION_START while already running → ignoring extra start")
         }
 
         return START_STICKY
       }
-
 
       else -> {
         Log.w(TAG, "onStartCommand with null/unknown action, restarting foreground countdown")
@@ -140,103 +156,129 @@ class FallAlertService : Service() {
   }
 
   // Restart countdown with new value
-private fun resetCountdown(newSeconds: Int = 10) {
-  Log.i(TAG, "resetCountdown newSeconds=$newSeconds (was $seconds)")
-  handler.removeCallbacks(ticker)
-  seconds = newSeconds
-  running = true
-  isRunning = true            // 👈 mark as running globally
-  handler.post(ticker)
-}
+  private fun resetCountdown(newSeconds: Int = 10) {
+    Log.i(TAG, "resetCountdown newSeconds=$newSeconds (was $seconds)")
+    handler.removeCallbacks(ticker)
+    seconds = newSeconds
+    running = true
+    isRunning = true
+    handler.post(ticker)
+  }
 
- private fun sendNow() {
-  // Basic log so you always know it fired
-  Log.i(TAG, "sendNow() TEST — reached sendNow() in FallAlertService")
+  // ---- NEW: GPS + dispatch to JS ----
+  private fun sendNow() {
+      Log.i(TAG, "sendNow() — requesting current GPS location...")
 
-  // If you've added Prefs.kt and are syncing JS → native,
-  // we can also log what native sees for contacts + message:
-  try {
-    val contacts = Prefs.loadContacts(this)
-    val template = Prefs.loadMessage(this)
+      try {
+          fusedClient
+              .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+              .addOnSuccessListener { loc: Location? ->
+                  val lat = loc?.latitude ?: 0.0
+                  val lon = loc?.longitude ?: 0.0
+                  val mapsUrl = "https://maps.google.com/?q=$lat,$lon"
 
-    Log.i(TAG, "sendNow() TEST — loaded ${contacts.size} contacts from Prefs")
-    contacts.forEachIndexed { index, number ->
-      Log.i(TAG, "sendNow() TEST — contact[$index] = $number")
+                  Log.i(TAG, "Using location lat=$lat lon=$lon url=$mapsUrl")
+
+                  // 1) Load contacts + message template from Prefs (native storage)
+                  val contacts = Prefs.loadContacts(this)
+                  val template = Prefs.loadMessage(this)
+
+                  val finalMessage = template.replace("{link}", mapsUrl)
+
+                  Log.i(TAG, "Will send to ${contacts.size} contacts, msg=\"$finalMessage\"")
+
+                  // 2) Fire HTTP request to your backend / Twilio server (OkHttp)
+                  sendAlertToBackend(contacts, finalMessage, lat, lon, mapsUrl)
+              }
+              .addOnFailureListener { e ->
+                  Log.e(TAG, "getCurrentLocation failed", e)
+                  // maybe still send without GPS
+              }
+      } catch (se: SecurityException) {
+          Log.e(TAG, "No location permission in service", se)
+          // maybe still send without GPS
+      }
+  }
+
+
+private fun sendAlertToBackend(
+    contacts: List<String>,
+    message: String,
+    lat: Double,
+    lon: Double,
+    mapsUrl: String
+) {
+    if (contacts.isEmpty()) {
+        Log.w(TAG, "sendAlertToBackend: no contacts stored, skipping send")
+        return
     }
 
-    Log.i(TAG, "sendNow() TEST — message template = \"$template\"")
+    contacts.forEachIndexed { index, number ->
+        Log.i(TAG, "sendAlertToBackend contact[$index] = $number")
+    }
 
-    // If you want, we can also simulate a link:
-    val fakeLink = "https://maps.google.com/?q=0,0"
-    val finalMessage = template.replace("{link}", fakeLink)
-    Log.i(TAG, "sendNow() TEST — final message would be: \"$finalMessage\"")
-  } catch (t: Throwable) {
-    Log.e(TAG, "sendNow() TEST — error while loading from Prefs: ${t.message}", t)
-  }
-
-  // ⛔ No network calls here yet — pure logging test
+    Log.i(
+        TAG,
+        "sendAlertToBackend: [TEST ONLY] would send alert to ${contacts.size} contacts " +
+            "with message=\"$message\" (lat=$lat, lon=$lon, url=$mapsUrl)"
+    )
 }
 
 
-private fun stopSelfCleanly() {
-  Log.i(TAG, "stopSelfCleanly() called, stopping service + foreground")
+  private fun stopSelfCleanly() {
+    Log.i(TAG, "stopSelfCleanly() called, stopping service + foreground")
 
-  // Let the UI know countdown is finished
-  sendBroadcast(
-    Intent(ACTION_TICK)
-      .putExtra(EXTRA_SECONDS, 0)
-      .putExtra("done", true)
-  )
+    // Let the UI know countdown is finished
+    sendBroadcast(
+      Intent(ACTION_TICK)
+        .setPackage(packageName)
+        .putExtra(EXTRA_SECONDS, 0)
+        .putExtra("done", true)
+    )
 
-  running = false
-  isRunning = false           // 👈 mark as stopped
+    running = false
+    isRunning = false
 
-  handler.removeCallbacks(ticker)
+    handler.removeCallbacks(ticker)
 
-  if (Build.VERSION.SDK_INT >= 24) {
-    stopForeground(STOP_FOREGROUND_REMOVE)
-  } else {
-    @Suppress("DEPRECATION")
-    stopForeground(true)
+    if (Build.VERSION.SDK_INT >= 24) {
+      stopForeground(STOP_FOREGROUND_REMOVE)
+    } else {
+      @Suppress("DEPRECATION")
+      stopForeground(true)
+    }
+    stopSelf()
   }
-  stopSelf()
-}
-
-
 
   // Runnable that fires every second
-// Runnable that fires every second
-// in ticker:
-private val ticker = object : Runnable {
-  override fun run() {
-    Log.d(TAG, "tick seconds=$seconds running=$running")
+  private val ticker = object : Runnable {
+    override fun run() {
+      Log.d(TAG, "tick seconds=$seconds running=$running")
 
-    val done = seconds <= 0
+      val done = seconds <= 0
 
-    // Broadcast to CountdownActivity
-    val tickIntent = Intent(ACTION_TICK).apply {
-      setPackage(packageName)
-      putExtra(EXTRA_SECONDS, seconds)   // 👈 use EXTRA_SECONDS here
-      putExtra("done", done)
-    }
-    sendBroadcast(tickIntent)
+      // Broadcast to CountdownActivity
+      val tickIntent = Intent(ACTION_TICK).apply {
+        setPackage(packageName)
+        putExtra(EXTRA_SECONDS, seconds)
+        putExtra("done", done)
+      }
+      sendBroadcast(tickIntent)
 
-    // Update notification text
-    val nm = getSystemService(NotificationManager::class.java)
-    nm.notify(NOTIF_ID, buildNotification(remaining = seconds, fsPending = null))
+      // Update notification text
+      val nm = getSystemService(NotificationManager::class.java)
+      nm.notify(NOTIF_ID, buildNotification(remaining = seconds, fsPending = null))
 
-    if (done) {
-      Log.i(TAG, "Countdown finished → triggering sendNow()")
-      sendNow()
-      stopSelfCleanly()
-    } else {
-      seconds--
-      handler.postDelayed(this, 1000)
+      if (done) {
+        Log.i(TAG, "Countdown finished → triggering sendNow()")
+        sendNow()
+        stopSelfCleanly()
+      } else {
+        seconds--
+        handler.postDelayed(this, 1000)
+      }
     }
   }
-}
-
-
 
   // Build notification with optional countdown + optional fullscreen intent
   private fun buildNotification(remaining: Int?, fsPending: PendingIntent?): Notification {
@@ -286,7 +328,7 @@ private val ticker = object : Runnable {
 
   override fun onDestroy() {
     super.onDestroy()
-    isRunning = false           // 👈 extra safety
+    isRunning = false
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
