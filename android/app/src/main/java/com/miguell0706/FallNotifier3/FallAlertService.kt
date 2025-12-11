@@ -21,7 +21,39 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+
+
+data class BackendLocation(
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val link: String? = null
+)
+
+data class BackendPayload(
+    val numbers: List<String>,
+    val message: String,
+    val location: BackendLocation? = null
+)
+
+// Dev: emulator -> backend on your PC
+private const val BACKEND_URL = "http://192.168.0.228:4000/send-alert"
+// Later in prod: "https://your-domain.com/send-alert"
+
+private val httpClient by lazy { OkHttpClient() }
+
+private val moshi by lazy {
+    Moshi.Builder()
+        .add(KotlinJsonAdapterFactory())
+        .build()
+}
+
+private val backendAdapter by lazy {
+    moshi.adapter(BackendPayload::class.java)
+}
+
+private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
 // ---- Background Service ----
 class FallAlertService : Service() {
@@ -166,6 +198,7 @@ class FallAlertService : Service() {
   }
 
   // ---- NEW: GPS + dispatch to JS ----
+  // ---- NEW: GPS + dispatch to backend ----
   private fun sendNow() {
       Log.i(TAG, "sendNow() — requesting current GPS location...")
 
@@ -180,7 +213,7 @@ class FallAlertService : Service() {
                   Log.i(TAG, "Using location lat=$lat lon=$lon url=$mapsUrl")
 
                   // 1) Load contacts + message template from Prefs (native storage)
-                  val contacts = Prefs.loadContacts(this)
+                  val contacts = Prefs.loadContacts(this)   // should be List<String> of phone numbers
                   val template = Prefs.loadMessage(this)
 
                   val finalMessage = template.replace("{link}", mapsUrl)
@@ -188,41 +221,75 @@ class FallAlertService : Service() {
                   Log.i(TAG, "Will send to ${contacts.size} contacts, msg=\"$finalMessage\"")
 
                   // 2) Fire HTTP request to your backend / Twilio server (OkHttp)
-                  sendAlertToBackend(contacts, finalMessage, lat, lon, mapsUrl)
+                  sendAlertToBackend(
+                      numbers = contacts,
+                      message = finalMessage,
+                      lat = lat,
+                      lng = lon,
+                      mapsUrl = mapsUrl
+                  )
               }
               .addOnFailureListener { e ->
                   Log.e(TAG, "getCurrentLocation failed", e)
-                  // maybe still send without GPS
+                  // If you want, you can still send without GPS:
+                  // val contacts = Prefs.loadContacts(this)
+                  // val template = Prefs.loadMessage(this)
+                  // sendAlertToBackend(contacts, template, null, null, null)
               }
       } catch (se: SecurityException) {
           Log.e(TAG, "No location permission in service", se)
-          // maybe still send without GPS
+          // Optional: still send without GPS
       }
   }
 
 
-private fun sendAlertToBackend(
-    contacts: List<String>,
-    message: String,
-    lat: Double,
-    lon: Double,
-    mapsUrl: String
-) {
-    if (contacts.isEmpty()) {
-        Log.w(TAG, "sendAlertToBackend: no contacts stored, skipping send")
-        return
-    }
+  private fun sendAlertToBackend(
+      numbers: List<String>,
+      message: String,
+      lat: Double?,
+      lng: Double?,
+      mapsUrl: String?
+    ) {
+      Thread {
+          try {
+              val location = when {
+                  mapsUrl != null -> BackendLocation(link = mapsUrl)
+                  lat != null && lng != null -> BackendLocation(lat = lat, lng = lng)
+                  else -> null
+              }
 
-    contacts.forEachIndexed { index, number ->
-        Log.i(TAG, "sendAlertToBackend contact[$index] = $number")
-    }
+              val payload = BackendPayload(
+                  numbers = numbers,
+                  message = message,
+                  location = location
+              )
 
-    Log.i(
-        TAG,
-        "sendAlertToBackend: [TEST ONLY] would send alert to ${contacts.size} contacts " +
-            "with message=\"$message\" (lat=$lat, lon=$lon, url=$mapsUrl)"
-    )
-}
+              val json = backendAdapter.toJson(payload)
+              Log.i(TAG, "sendAlertToBackend() payload=$json")
+
+              val body = json.toRequestBody(JSON_MEDIA_TYPE)
+
+              val request = Request.Builder()
+                  .url(BACKEND_URL)
+                  .post(body)
+                  .build()
+
+              httpClient.newCall(request).execute().use { response ->
+                  if (!response.isSuccessful) {
+                      Log.e(
+                          TAG,
+                          "sendAlertToBackend error: HTTP ${response.code} ${response.message}"
+                      )
+                  } else {
+                      Log.i(TAG, "sendAlertToBackend success: ${response.code}")
+                  }
+              }
+          } catch (t: Throwable) {
+              Log.e(TAG, "sendAlertToBackend exception", t)
+          }
+      }.start()
+  }
+
 
 
   private fun stopSelfCleanly() {
